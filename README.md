@@ -11,7 +11,7 @@ Pick your maturity level. Plug in your specs. Ship.
 Every team reinvents project structure from scratch. This blueprint gives you an opinionated skeleton that scales from solo MVP to autonomous multi-agent systems — without locking you into a specific stack.
 
 ```
-Level 1 → You and Claude as copilot on a weekend project
+Level 1 → You and Claude Code on a weekend project
 Level 4 → Agent teams with self-healing CI and compliance auditors
 ```
 
@@ -77,7 +77,9 @@ your-project/
 │   ├── product/                 ←      PRDs, vision, roadmap
 │   ├── architecture/            ←      ADRs (decision records)
 │   ├── specs/                   ←      Modular spec modules
-│   └── runbooks/                ←      Deploy, debug, post-mortems
+│   ├── runbooks/                ←      Deploy, debug, post-mortems
+│   ├── workflow.md              ←      Orchestration: who does what
+│   └── assets/                  ←      Diagrams and images
 ├── src/                         ←      Your code
 ├── memory/                      ← L4+  Long-term vector memory
 │   ├── index.py                 ←      Index project into vector DB
@@ -155,6 +157,22 @@ python memory/index.py              # Index everything
 python memory/query.py "auth"       # Semantic search
 python memory/query.py --stats      # What's indexed
 ```
+
+## Who Does What
+
+Obsidian is the brain, Figma is the eye, Claude Code is the hand.
+
+![Workflow diagram](docs/assets/workflow-diagram.svg)
+
+| Question | Answer |
+|----------|--------|
+| Where do I start? | **Obsidian** — write what you want |
+| Who do I talk to? | **Claude Code** — it executes, but reads from Obsidian |
+| Where do I design? | **Figma Make** — prototypes and design system |
+| Where do I criticize? | **Obsidian** — reviews, post-mortems, next cycle |
+| What connects everything? | **Git** — same repo, everything versioned |
+
+See [docs/workflow.md](docs/workflow.md) for the full orchestration guide.
 
 ## Daily Workflow
 
