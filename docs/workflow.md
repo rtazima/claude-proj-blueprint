@@ -1,21 +1,21 @@
 # Workflow: Who Does What
 
 > The Obsidian vault is where everything starts and where everything returns.
-> Obsidian is the brain, Figma is the eye, Claude Code is the hand.
+> Obsidian is the brain, Claude Code is the hand. Figma is optional — the eye when you need one.
 
-## The three tools
+## The tools
 
-| Tool | Role | What you do there |
-|------|------|-------------------|
-| **Obsidian** | The brain | Think, decide, plan, criticize, review |
-| **Figma Make** | The eye | See, shape, prototype, iterate on design |
-| **Claude Code** | The hand | Build, test, deploy, automate |
+| Tool | Role | When to use | Required? |
+|------|------|-------------|-----------|
+| **Obsidian** | The brain | Think, decide, plan, criticize, review | Always |
+| **Claude Code** | The hand | Build, test, deploy, automate | Always |
+| **Figma Make** | The eye | See, shape, prototype, iterate on design | Optional — see [Design Flow Guide](design-flow-guide.md) |
 
 ## The flow
 
 ### 1. Start in Obsidian — always
 
-Open the vault and write what you want. It can be a 3-line PRD ("I want the agent to do X") or a full ADR. The point is: before opening Figma or Claude Code, what you want needs to exist as text in Obsidian. Even if it's a rough draft.
+Open the vault and write what you want. It can be a 3-line PRD ("I want the agent to do X") or a full ADR. The point is: before opening Claude Code, what you want needs to exist as text in Obsidian. Even if it's a rough draft.
 
 This is where you think, decide, and record why you decided.
 
@@ -23,9 +23,18 @@ This is where you think, decide, and record why you decided.
 - Write ADRs in `docs/architecture/`
 - Check specs in `docs/specs/`
 
-### 2. If there's UI → go through Figma Make
+### 2. If there's UI → choose your design flow
 
-Take the PRD from Obsidian, open Figma Make, and describe what you want to see. Figma generates the prototype. Iterate there until the visual makes sense. When it does, mark it as "Ready for dev" in Dev Mode.
+Your team's design flow determines what happens next. See [Design Flow Guide](design-flow-guide.md) for details.
+
+**Figma flow** (team has a designer):
+Take the PRD from Obsidian, open Figma Make, create the screen. Mark "Ready for dev" in Dev Mode. Add the Figma link to the PRD.
+
+**Agent flow** (no designer):
+Skip Figma entirely. The PRD describes the requirements. Design tokens in `docs/specs/design-system/` define the visual language. The frontend agent generates the UI.
+
+**Hybrid flow** (designer covers key screens):
+Use Figma for complex/custom screens. Let the agent handle standard CRUD, forms, and dashboards.
 
 If there's no UI (backend, infra, pure agent work), skip to step 3.
 
@@ -43,7 +52,11 @@ Claude reads `CLAUDE.md` automatically — it already knows your stack, conventi
 /implement docs/product/feat-auth.md
 ```
 
-It reads the PRD from Obsidian, pulls design specs from Figma via MCP, and implements. Compliance, security, and quality skills activate on their own based on context.
+Claude auto-detects the design flow:
+- **PRD has Figma link** → reads design specs from Figma via MCP, implements matching the design
+- **PRD has no Figma link** → loads design tokens, scans existing UI for patterns, generates UI from requirements
+
+Compliance, security, and quality skills activate on their own based on context.
 
 ### 4. Return to Obsidian — always
 
@@ -60,11 +73,13 @@ The output from Claude Code (code, tests, generated ADRs) goes to Git. But the c
 |----------|--------|
 | Where do I start? | **Obsidian** — write what you want |
 | Who do I talk to? | **Claude Code** — it executes, but reads from Obsidian |
-| Where do I design? | **Figma Make** — prototypes and design system |
+| Where do I design? | **Figma** (if enabled) or **design tokens** (agent flow) |
 | Where do I criticize? | **Obsidian** — reviews, post-mortems, next cycle |
 | What connects everything? | **Git** — everything in the same repo, everything versioned |
 
 ## The cycle
+
+### With Figma (Flow A or Hybrid)
 
 ```
 You (human)
@@ -85,15 +100,34 @@ Figma Make ──MCP──► Claude Code
       Next iteration
 ```
 
-Obsidian is the beginning and the end of every cycle. Figma and Claude Code are tools that it feeds. The cycle repeats until the feature is done, the product ships, or the decision changes.
+### Without Figma (Flow B — Agent)
+
+```
+You (human)
+  │
+  ▼
+Obsidian (think, decide, plan)
+  │
+  ▼
+Claude Code + frontend agent
+(load tokens → generate UI → build, test)
+  │
+  ▼
+Obsidian (critique, review)
+  │
+  ▼
+Next iteration
+```
+
+In both flows, Obsidian is the beginning and end of every cycle. The cycle repeats until the feature is done, the product ships, or the decision changes.
 
 ## By maturity level
 
 ### L1 — Solo
-You write in Obsidian, talk to Claude Code directly. No Figma needed unless there's UI.
+You write in Obsidian, talk to Claude Code directly. Choose Figma or Agent flow — both work at L1.
 
 ### L2 — Team
-PRDs and ADRs in Obsidian are shared via Git. Skills auto-activate in Claude Code. Figma design specs flow in via MCP. The team reviews in Obsidian.
+PRDs and ADRs in Obsidian are shared via Git. Skills auto-activate in Claude Code. If using Figma, design specs flow in via MCP. If using Agent flow, the frontend agent skill generates UI from tokens. The team reviews in Obsidian.
 
 ### L3 — Production
 Same as L2, but hooks run automatically on every file write (lint, security). The `/spec-review` command triggers compliance, security, and quality agents. Post-mortems go to Obsidian after every incident.

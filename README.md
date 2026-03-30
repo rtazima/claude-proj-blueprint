@@ -63,6 +63,7 @@ your-project/
 │   │   ├── code-review/
 │   │   ├── testing/
 │   │   ├── implement-prd/
+│   │   ├── frontend-agent/      ←      UI generation without Figma
 │   │   ├── adr/
 │   │   ├── memory/              ←      L4 long-term memory retrieval
 │   │   └── _template-skill/     ←      Create your own
@@ -79,6 +80,7 @@ your-project/
 │   ├── product/                 ←      PRDs, vision, roadmap
 │   ├── architecture/            ←      ADRs (decision records)
 │   ├── specs/                   ←      Modular spec modules
+│   ├── design-flow-guide.md     ←      Figma vs Agent vs Hybrid decision
 │   └── runbooks/                ←      Deploy, debug, post-mortems
 ├── src/                         ←      Your code
 ├── memory/                      ← L4+  Long-term vector memory
@@ -104,6 +106,7 @@ Specs are **plug-and-play** knowledge modules in `docs/specs/`. Enable only what
 | `observability/` | Logs, metrics, traces, alerts | Every production project |
 | `scalability/` | Caching, queues, performance | When scale matters |
 | `versioning/` | API versions, migrations, semver | Public APIs, multiple clients |
+| `design-system/` | Design tokens, component patterns, UI strategy | Projects with UI — makes Figma optional |
 | `accessibility/` | WCAG, a11y | User-facing products |
 | `i18n/` | Multi-language, localization | International products |
 | `testing-strategy/` | Test pyramid, QA process | Teams with 3+ devs |
@@ -182,7 +185,9 @@ cd your-project && claude
 
 **Obsidian** — Open `docs/` as a vault. PRDs, ADRs, specs are interconnected with `[[wiki-links]]`.
 
-**Figma** — Add Figma links to `CLAUDE.md`. Use the Figma MCP server for design-to-code.
+**Figma** (optional) — For teams with a designer. Add Figma links to PRDs, use the Figma MCP server for design-to-code. See the [Design Flow Guide](docs/design-flow-guide.md) to decide if you need it.
+
+**Frontend Agent** (alternative to Figma) — For dev-only teams. Define design tokens in `docs/specs/design-system/`, choose a component library, and the `/implement` command generates UI from PRD requirements. No designer needed.
 
 **GitHub** — Issue templates and CI workflow included.
 

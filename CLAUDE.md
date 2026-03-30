@@ -44,10 +44,23 @@ See `docs/product/vision.md` for the full product vision.
 - Every UI component follows the design system
 
 ## Design
-[SPEC] If applicable. Example:
+[SPEC] Choose your design flow (Figma is optional):
+
+### Option A — Figma flow (team has a designer)
 - Design system: [FIGMA LINK]
 - Use the Figma MCP server for visual context
-- Token reference: `docs/specs/design-tokens.md`
+- `/implement` reads Figma link from PRD → extracts design → generates code
+
+### Option B — Agent flow (no designer / dev-only team)
+- Design tokens: `docs/specs/design-system/README.md`
+- Component library: [SPEC] [shadcn / Radix / MUI / custom]
+- `/implement` reads PRD + tokens → frontend agent generates UI
+- Skill: `.claude/skills/frontend-agent/SKILL.md`
+
+### Option C — Hybrid
+- Use Figma for complex/custom screens
+- Use agent flow for standard CRUD, forms, dashboards
+- Both flows coexist — detected automatically per PRD
 
 ## Modular Specifications
 The project adopts the following spec modules (see `docs/specs/`):
@@ -59,6 +72,7 @@ The project adopts the following spec modules (see `docs/specs/`):
 - [ ] `observability/` → Monitoring, logging, tracing
 - [ ] `scalability/` → Performance, caching, queues
 - [ ] `versioning/` → API versioning, DB migrations, semver
+- [ ] `design-system/` → Design tokens, component patterns, UI strategy
 - [ ] `accessibility/` → a11y, WCAG
 - [ ] `i18n/` → Internationalization, localization
 - [ ] `testing-strategy/` → Test pyramid, QA

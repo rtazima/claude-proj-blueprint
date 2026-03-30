@@ -12,6 +12,7 @@
 | **observability/** | Logs, metrics, traces | Every production project |
 | **scalability/** | Performance, caching, queues | When scale matters |
 | **versioning/** | API versions, migrations | Products with public APIs or multiple clients |
+| **design-system/** | Design tokens, component patterns, UI strategy | Projects with UI — makes Figma optional |
 | **accessibility/** | WCAG, a11y | Products with user interfaces |
 | **i18n/** | Multi-language | International products |
 | **testing-strategy/** | Test pyramid, QA | Teams with 3+ devs |

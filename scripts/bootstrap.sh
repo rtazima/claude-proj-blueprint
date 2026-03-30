@@ -1,15 +1,17 @@
 #!/bin/bash
 # Bootstrap script for Claude Code Project Template
-# Usage: ./scripts/bootstrap.sh --level [1|2|3|4]
+# Usage: ./scripts/bootstrap.sh --level [1|2|3|4] [--design figma|agent|hybrid]
 
 set -e
 
 LEVEL=2  # default
+DESIGN_FLOW=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --level) LEVEL="$2"; shift 2 ;;
-    *) echo "Usage: ./scripts/bootstrap.sh --level [1|2|3|4]"; exit 1 ;;
+    --design) DESIGN_FLOW="$2"; shift 2 ;;
+    *) echo "Usage: ./scripts/bootstrap.sh --level [1|2|3|4] [--design figma|agent|hybrid]"; exit 1 ;;
   esac
 done
 
@@ -33,6 +35,83 @@ echo "   ✅ Basic structure ready"
 echo "   📝 TODO: Fill in [SPEC] markers in CLAUDE.md"
 echo "   📝 TODO: Fill in docs/product/vision.md"
 echo ""
+
+# ============================================================
+# Design flow — ask if not provided via --design flag
+# ============================================================
+if [ -z "$DESIGN_FLOW" ]; then
+  echo "🎨 Design flow — how will UI be built?"
+  echo "   See docs/design-flow-guide.md for detailed guidance."
+  echo ""
+  echo "   1) Figma    — PRD + Figma link → code (team has a designer)"
+  echo "   2) Agent    — PRD + design tokens → frontend agent generates UI (no designer)"
+  echo "   3) Hybrid   — Figma for complex screens, agent for the rest"
+  echo "   4) None     — no UI in this project (backend/CLI/agent only)"
+  echo ""
+  read -p "   Choose [1-4] (default: 2): " design_choice
+
+  case "$design_choice" in
+    1) DESIGN_FLOW="figma" ;;
+    3) DESIGN_FLOW="hybrid" ;;
+    4) DESIGN_FLOW="none" ;;
+    *) DESIGN_FLOW="agent" ;;
+  esac
+fi
+
+echo ""
+
+# Configure design flow
+configure_design_flow() {
+  local flow="$1"
+
+  case "$flow" in
+    figma)
+      echo "   🎨 Design flow: Figma"
+      echo "   ✅ Figma MCP reference enabled"
+      echo "   ✅ design-system/ spec module enabled"
+      mkdir -p docs/specs/design-system
+      # Update CLAUDE.md Design section — mark Figma as active
+      if grep -q "\[SPEC\] Choose your design flow" CLAUDE.md 2>/dev/null; then
+        sed -i.bak 's/\[SPEC\] Choose your design flow (Figma is optional):/Design flow: **Figma** (configured by bootstrap)/' CLAUDE.md && rm -f CLAUDE.md.bak
+      fi
+      echo "   📝 TODO: Add Figma file link in docs/specs/design-system/README.md"
+      echo "   📝 TODO: Configure Figma MCP server in .claude/settings.json"
+      echo "   📝 TODO: Fill in design tokens in docs/specs/design-system/README.md"
+      ;;
+    agent)
+      echo "   🤖 Design flow: Agent (no Figma required)"
+      echo "   ✅ frontend-agent skill enabled"
+      echo "   ✅ design-system/ spec module enabled"
+      mkdir -p docs/specs/design-system .claude/skills/frontend-agent
+      if grep -q "\[SPEC\] Choose your design flow" CLAUDE.md 2>/dev/null; then
+        sed -i.bak 's/\[SPEC\] Choose your design flow (Figma is optional):/Design flow: **Agent** (configured by bootstrap)/' CLAUDE.md && rm -f CLAUDE.md.bak
+      fi
+      echo "   📝 TODO: Define design tokens in docs/specs/design-system/README.md"
+      echo "   📝 TODO: Choose a component library (shadcn, Radix, MUI, etc.)"
+      echo "   📝 TODO: Review .claude/skills/frontend-agent/SKILL.md"
+      ;;
+    hybrid)
+      echo "   🎨🤖 Design flow: Hybrid (Figma + Agent)"
+      echo "   ✅ Figma MCP reference enabled"
+      echo "   ✅ frontend-agent skill enabled"
+      echo "   ✅ design-system/ spec module enabled"
+      mkdir -p docs/specs/design-system .claude/skills/frontend-agent
+      if grep -q "\[SPEC\] Choose your design flow" CLAUDE.md 2>/dev/null; then
+        sed -i.bak 's/\[SPEC\] Choose your design flow (Figma is optional):/Design flow: **Hybrid** (configured by bootstrap)/' CLAUDE.md && rm -f CLAUDE.md.bak
+      fi
+      echo "   📝 TODO: Define design tokens in docs/specs/design-system/README.md"
+      echo "   📝 TODO: Configure Figma MCP server in .claude/settings.json"
+      echo "   📝 TODO: Document which screens go through Figma vs Agent in PRDs"
+      ;;
+    none)
+      echo "   ⏭️  Design flow: None (no UI)"
+      echo "   Skipping design system setup"
+      ;;
+  esac
+  echo ""
+}
+
+configure_design_flow "$DESIGN_FLOW"
 
 if [ "$LEVEL" -lt 2 ]; then
   echo "✅ Level 1 setup complete!"
@@ -169,6 +248,7 @@ echo "================================================"
 echo "📊 Summary"
 echo "================================================"
 echo "Level:    $LEVEL"
+echo "Design:   $DESIGN_FLOW"
 echo "Skills:   $SKILL_COUNT"
 echo "Commands: $CMD_COUNT"
 echo "Agents:   $AGENT_COUNT"
@@ -177,3 +257,9 @@ echo "Memory:   $([ -d 'memory/.chroma' ] && echo 'Indexed' || echo 'Not indexed
 echo ""
 echo "Next: Search for [SPEC] markers and fill them in:"
 echo "  grep -r '\[SPEC\]' CLAUDE.md docs/ .claude/ | head -20"
+if [ "$DESIGN_FLOW" != "none" ]; then
+  echo ""
+  echo "Design system setup:"
+  echo "  See docs/design-flow-guide.md for detailed guidance"
+  echo "  Fill in tokens: docs/specs/design-system/README.md"
+fi
