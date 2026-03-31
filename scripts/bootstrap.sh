@@ -255,9 +255,35 @@ if [ -f "memory/index.py" ]; then
 else
   echo "   ⚠️  memory/ module not found"
 fi
+# Configure agent teams in settings.json
+SETTINGS_FILE=".claude/settings.json"
+if [ -f "$SETTINGS_FILE" ]; then
+  if ! grep -q "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" "$SETTINGS_FILE" 2>/dev/null; then
+    # Add env block with agent teams flag
+    if grep -q '"env"' "$SETTINGS_FILE" 2>/dev/null; then
+      # env block exists — add the key
+      sed -i.bak 's/"env"\s*:\s*{/"env": {\n    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",/' "$SETTINGS_FILE" && rm -f "$SETTINGS_FILE.bak"
+    else
+      # No env block — add it after opening brace
+      sed -i.bak 's/^{/{\'$'\n  "env": {\n    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"\n  },/' "$SETTINGS_FILE" && rm -f "$SETTINGS_FILE.bak"
+    fi
+    echo "   ✅ Agent teams enabled in $SETTINGS_FILE"
+  else
+    echo "   ✅ Agent teams already configured"
+  fi
+else
+  echo "   ⚠️  $SETTINGS_FILE not found — creating with agent teams config"
+  cat > "$SETTINGS_FILE" << 'SETTINGS_EOF'
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+SETTINGS_EOF
+  echo "   ✅ Agent teams enabled in $SETTINGS_FILE"
+fi
+
 echo ""
-echo "   📝 TODO: Enable agent teams:"
-echo "      export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"
 echo "   📝 TODO: Customize agents in .claude/agents/"
 echo "   📝 TODO: Set up self-healing CI pipeline"
 echo ""
