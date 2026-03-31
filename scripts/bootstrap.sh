@@ -201,20 +201,41 @@ echo "🧠 L4: Setting up long-term memory..."
 if [ -f "memory/index.py" ]; then
   echo "   ✅ Memory module found"
 
-  # Check if dependencies are installed
-  if python3 -c "import chromadb" 2>/dev/null; then
-    echo "   ✅ Dependencies installed"
+  # Create virtual environment if it doesn't exist
+  if [ ! -d "memory/.venv" ]; then
+    echo "   📦 Creating Python virtual environment..."
+    if python3 -m venv memory/.venv 2>/dev/null; then
+      echo "   ✅ Virtual environment created at memory/.venv"
+    else
+      echo "   ⚠️  Failed to create venv — install python3-venv or use: python3 -m venv memory/.venv"
+    fi
+  else
+    echo "   ✅ Virtual environment exists (memory/.venv/)"
+  fi
+
+  # Install dependencies in venv
+  MEMORY_PIP="memory/.venv/bin/pip"
+  MEMORY_PYTHON="memory/.venv/bin/python"
+
+  if [ -f "$MEMORY_PIP" ]; then
+    if "$MEMORY_PYTHON" -c "import chromadb" 2>/dev/null; then
+      echo "   ✅ Dependencies installed"
+    else
+      echo "   📦 Installing memory dependencies..."
+      "$MEMORY_PIP" install -q -r memory/requirements.txt 2>/dev/null \
+        && echo "   ✅ Dependencies installed" \
+        || echo "   ⚠️  Install failed — run manually: source memory/.venv/bin/activate && pip install -r memory/requirements.txt"
+    fi
 
     # Auto-index if not already done
     if [ ! -d "memory/.chroma" ]; then
       echo "   📦 Running initial index..."
-      python3 memory/index.py 2>/dev/null && echo "   ✅ Initial index complete" || echo "   ⚠️  Index failed — run manually: python memory/index.py"
+      "$MEMORY_PYTHON" memory/index.py 2>/dev/null \
+        && echo "   ✅ Initial index complete" \
+        || echo "   ⚠️  Index failed — run manually: source memory/.venv/bin/activate && python memory/index.py"
     else
       echo "   ✅ Vector DB exists (memory/.chroma/)"
     fi
-  else
-    echo "   ⚠️  Dependencies not installed"
-    echo "   📝 TODO: pip install -r memory/requirements.txt"
   fi
 
   # Install post-commit hook
@@ -222,6 +243,14 @@ if [ -f "memory/index.py" ]; then
     cp scripts/post-commit-index.sh .git/hooks/post-commit
     chmod +x .git/hooks/post-commit
     echo "   ✅ Post-commit hook installed (auto-index)"
+  fi
+
+  # Add venv to .gitignore if not already there
+  if [ -f ".gitignore" ]; then
+    if ! grep -q "memory/.venv" .gitignore 2>/dev/null; then
+      echo "memory/.venv/" >> .gitignore
+      echo "   ✅ memory/.venv/ added to .gitignore"
+    fi
   fi
 else
   echo "   ⚠️  memory/ module not found"
