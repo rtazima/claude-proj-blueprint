@@ -140,6 +140,9 @@ echo "   📦 $SKILL_COUNT skills found"
 CMD_COUNT=$(find .claude/commands -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
 echo "   ⚡ $CMD_COUNT commands found"
 
+echo "   ✅ Persistence mode (/ralph) — iterative implementation until all criteria pass"
+echo "   ✅ Slop cleaner (/clean) — remove AI-generated code patterns"
+echo "   ✅ Learner (/learn) — extract patterns from recent work to improve skills"
 echo "   📝 TODO: Create project-specific skills in .claude/skills/"
 echo "   📝 TODO: Use .claude/skills/_template-skill/SKILL.md as template"
 echo ""
@@ -217,10 +220,14 @@ else
   echo "   ⚠️  scripts/pre-commit-review.sh not found"
 fi
 
+echo "   ✅ docs-check.sh hook active — warns if src/ changes without docs/ update"
+echo "   ✅ context-guard.sh — warns when conversation gets long (50+ tool calls)"
+echo "   ✅ pre-compact-save.sh — saves context before compaction"
+echo "   ✅ magic-keywords.sh — auto-detects intent ('don't stop', 'clean up', etc.)"
 echo "   📝 TODO: Test hooks with a sample file write"
 echo "   📝 TODO: Customize lint-check.sh for your stack"
+echo "   📝 TODO: Add project-specific keywords to scripts/magic-keywords.sh"
 echo "   📝 TODO: See docs/specs/code-review-gates.md for review gate philosophy"
-echo "   ✅ docs-check.sh hook active — warns if src/ changes without docs/ update"
 echo ""
 
 if [ "$LEVEL" -lt 4 ]; then
@@ -333,7 +340,14 @@ SETTINGS_EOF
 fi
 
 echo ""
+echo ""
+echo "🔍 L4: Setting up deliverables verification..."
+mkdir -p docs/specs/deliverables
+SCHEMA_COUNT=$(find docs/specs/deliverables -name "*.schema" ! -name "_template*" 2>/dev/null | wc -l | tr -d ' ')
+echo "   📋 $SCHEMA_COUNT agent deliverable schemas found"
+echo "   ✅ verify-deliverables.sh hook active — validates agent output"
 echo "   📝 TODO: Customize agents in .claude/agents/"
+echo "   📝 TODO: Add deliverable schemas in docs/specs/deliverables/ for custom agents"
 echo "   📝 TODO: Set up self-healing CI pipeline"
 echo ""
 

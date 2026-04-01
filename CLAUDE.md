@@ -37,6 +37,23 @@ See `docs/product/vision.md` for the full product vision.
 - `[test command]` → tests
 - `[lint command]` → lint
 
+### Slash commands
+- `/implement <PRD>` → implement feature from PRD (Plan Mode → code → test → docs)
+- `/ralph <PRD>` → persistence mode: implement and don't stop until all acceptance criteria pass
+- `/clean [file|dir]` → remove AI-generated slop from code
+- `/learn [--commits N]` → analyze recent work, extract patterns, improve skills
+- `/deploy` → run deploy checklist
+- `/memory <search|index|stats>` → long-term memory operations
+- `/spec-review <path>` → run agent audit (security + compliance + quality)
+
+### Magic keywords (L3+)
+These phrases are auto-detected and activate the corresponding workflow:
+- "don't stop" / "keep going" / "ralph" → persistence mode
+- "clean up" / "remove slop" / "polish" → slop cleaner
+- "build me feature" / "implement feature" → /implement flow
+- "security audit" / "compliance audit" → /spec-review flow
+- "learn from this" / "retrospective" → learner skill
+
 ## Workflow Rules
 [SPEC] Workflow rules. Example:
 - Always run tests before committing
@@ -59,6 +76,12 @@ PRDs come from Obsidian, implementation flows through code, and decisions go bac
 
 The `/implement` skill enforces this checklist before committing.
 The `docs-check` hook warns if `src/` changed without `docs/` in the same commit.
+
+### Context management (L3+)
+- **Context guard**: auto-warns when conversation is getting long (50+ tool calls = warning, 80+ = critical)
+- **Pre-compact hook**: auto-saves context to `memory/compact-context.md` before compaction
+- **Session notes**: append important context to `memory/session-notes.md` during long sessions
+- If `memory/compact-context.md` exists at session start, read it to restore context from previous segment
 
 ### Code Review Gates (L3+)
 Every `git commit` triggers automated review via `scripts/pre-commit-review.sh`:
@@ -119,6 +142,11 @@ Agents use different models based on task complexity and cost:
 
 Configure via `model:` in agent frontmatter (`.claude/agents/*.md`).
 Switch session model: `/model opus` or `claude --model sonnet`.
+
+### Deliverables verification (L4)
+Agent output is validated against schemas in `docs/specs/deliverables/`.
+The `SubagentStop` hook checks that agents include all required fields (severity, location, remediation, etc.).
+Add new schemas with one required field per line — see `docs/specs/deliverables/_template.schema`.
 
 ## Gotchas
 [SPEC] List known edge cases and pitfalls:

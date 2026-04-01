@@ -1,0 +1,8 @@
+# Deliverables schema for [SPEC] agent-name
+# One required field per line. Lines starting with # are comments.
+# The verify-deliverables.sh hook checks if the agent output contains each field.
+
+Severity
+Location
+Description
+Remediation

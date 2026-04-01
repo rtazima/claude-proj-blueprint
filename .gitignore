@@ -17,6 +17,9 @@ docs/.trash/
 # =============================================================================
 memory/.chroma/
 memory/.index_state.json
+memory/compact-context.md
+memory/session-notes.md
+memory/.venv/
 
 # =============================================================================
 # Environment
