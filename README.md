@@ -64,14 +64,20 @@ your-project/
 │   │   ├── testing/
 │   │   ├── implement-prd/
 │   │   ├── frontend-agent/      ←      UI generation without Figma
+│   │   ├── persistence/         ←      Ralph mode — iterate until done
+│   │   ├── slop-cleaner/        ←      Remove AI-generated code noise
+│   │   ├── learner/             ← L4   Extract patterns to improve skills
 │   │   ├── adr/
 │   │   ├── memory/              ←      L4 long-term memory retrieval
 │   │   └── _template-skill/     ←      Create your own
 │   ├── commands/                ← L2+  Slash commands
 │   │   ├── implement.md         ←      /implement <prd-path>
+│   │   ├── ralph.md             ←      /ralph <prd-path> (don't stop)
+│   │   ├── clean.md             ←      /clean [file|dir]
+│   │   ├── learn.md             ←      /learn [--commits N]
 │   │   ├── deploy.md            ←      /deploy
 │   │   └── spec-review.md       ←      /spec-review <path>
-│   ├── hooks.json               ← L3+  Automated gates
+│   ├── hooks.json               ← L3+  Automated gates (7 hooks)
 │   └── agents/                  ← L4+  Specialized sub-agents
 │       ├── compliance-auditor.md
 │       ├── security-auditor.md
@@ -80,6 +86,7 @@ your-project/
 │   ├── product/                 ←      PRDs, vision, roadmap
 │   ├── architecture/            ←      ADRs (decision records)
 │   ├── specs/                   ←      Modular spec modules
+│   │   └── deliverables/        ← L4   Agent output validation schemas
 │   ├── design-flow-guide.md     ←      Figma vs Agent vs Hybrid decision
 │   └── runbooks/                ←      Deploy, debug, post-mortems
 ├── src/                         ←      Your code
@@ -92,6 +99,13 @@ your-project/
     ├── bootstrap.sh             ←      Level-based setup
     ├── lint-check.sh            ←      L3+ post-write hook
     ├── security-check.sh        ←      L3+ pre-bash hook
+    ├── pre-commit-review.sh     ←      L3+ AI code review on commit
+    ├── ai-review.sh             ←      L3+ AI review (CLI or API)
+    ├── docs-check.sh            ←      L3+ documentation sync warning
+    ├── magic-keywords.sh        ←      L3+ auto-detect intent
+    ├── pre-compact-save.sh      ←      L3+ save context before compaction
+    ├── context-guard.sh         ←      L3+ warn on long conversations
+    ├── verify-deliverables.sh   ←      L4 validate agent output
     └── post-commit-index.sh     ←      L4 auto-index on commit
 ```
 
@@ -173,11 +187,21 @@ cd your-project && claude
 # /compact to compress context
 # Commit frequently, new session per feature
 
+# L2+ — Persistence mode
+# /ralph docs/product/feat-auth.md     → iterate until all criteria pass
+# Or just say: "don't stop until all tests pass"
+
+# L2+ — Code quality
+# /clean src/                           → remove AI slop from code
+# Or just say: "clean up the code"
+
 # L3+
 # /spec-review src/ → run compliance + security + quality audit
+# Magic keywords work automatically: "security audit", "build me feature"
 
 # L4+
 # /memory search "how did we handle rate limiting"
+# /learn --commits 20                   → extract patterns, improve skills
 # "Create an agent team to implement auth with OAuth2"
 ```
 
@@ -274,6 +298,10 @@ This blueprint gives you the structure, but you need the fundamentals to use it 
 | Anthropic Academy | [docs.claude.com/en/docs/anthropic-academy](https://docs.claude.com/en/docs/anthropic-academy) | Free interactive courses from Anthropic |
 
 > **Note:** Claude Code evolves fast. These links were verified against Claude Code v2.1.79 (March 2026). If a link breaks, check the [Claude Code docs homepage](https://code.claude.com/docs/en/overview) for the updated path.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full evolution of the project — every feature, fix, and decision documented by date.
 
 ## Contributing
 
