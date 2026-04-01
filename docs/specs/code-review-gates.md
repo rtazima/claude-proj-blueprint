@@ -96,6 +96,7 @@ Uncomment the relevant sections in `scripts/pre-commit-review.sh`.
 | L3 | `pre-commit-review.sh` hook | Automated gate on every commit |
 | L3 | `lint-check.sh` hook | Lint on every file write |
 | L3 | `security-check.sh` hook | Block dangerous bash commands |
+| L3 | `docs-check.sh` hook | Warn if source changed without docs update |
 | L4 | `quality-guardian` agent | Deep quality audit with agent teams |
 | L4 | `security-auditor` agent | OWASP/security audit with agent teams |
 

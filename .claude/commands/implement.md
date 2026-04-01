@@ -15,6 +15,15 @@ Workflow:
      c. Generate UI from PRD requirements + tokens + component library
 6. Implement following CLAUDE.md and the implement-prd skill
 7. Create tests following the testing skill
-8. Commit with Conventional Commits format message
+8. **Documentation checklist** — before committing, verify and update:
+   - [ ] CLAUDE.md module map (if new files/modules)
+   - [ ] .env.example (if new environment variables)
+   - [ ] README.md project structure (if new files/modules)
+   - [ ] ADR in docs/architecture/ (if architectural decisions were made)
+   - [ ] Gotchas in CLAUDE.md (if new edge cases discovered)
+   - [ ] Notes in the PRD (if implementation revealed business insights)
+   - [ ] Runbook in docs/runbooks/ (if new operational procedures needed)
+   Skip items that don't apply, but actively check each one.
+9. Commit with Conventional Commits format message
 
 Always ask for plan confirmation before starting implementation.

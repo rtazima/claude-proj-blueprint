@@ -220,6 +220,7 @@ fi
 echo "   📝 TODO: Test hooks with a sample file write"
 echo "   📝 TODO: Customize lint-check.sh for your stack"
 echo "   📝 TODO: See docs/specs/code-review-gates.md for review gate philosophy"
+echo "   ✅ docs-check.sh hook active — warns if src/ changes without docs/ update"
 echo ""
 
 if [ "$LEVEL" -lt 4 ]; then

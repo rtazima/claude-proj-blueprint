@@ -43,6 +43,23 @@ See `docs/product/vision.md` for the full product vision.
 - Never commit secrets
 - Every UI component follows the design system
 
+### Documentation Rules
+Every change that affects the product MUST be documented back to the Obsidian vault (`docs/`).
+PRDs come from Obsidian, implementation flows through code, and decisions go back to Obsidian.
+
+| What changed | What to update |
+|---|---|
+| New feature or module | CLAUDE.md module map + README project structure |
+| New env vars | `.env.example` with defaults and comments |
+| Architectural decision | ADR in `docs/architecture/` (next sequential number) |
+| Production bug | Post-mortem in `docs/runbooks/post-mortems/` |
+| Business insight during implementation | Note in the relevant PRD (`docs/product/`) |
+| API/integration change | Runbook in `docs/runbooks/` |
+| Gotcha discovered | CLAUDE.md Gotchas section |
+
+The `/implement` skill enforces this checklist before committing.
+The `docs-check` hook warns if `src/` changed without `docs/` in the same commit.
+
 ### Code Review Gates (L3+)
 Every `git commit` triggers automated review via `scripts/pre-commit-review.sh`:
 - Compilation, tests, secrets, quality, error handling, test coverage
