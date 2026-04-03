@@ -70,9 +70,25 @@
         ]
       }
     ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/agent-lifecycle.sh start",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/agent-lifecycle.sh stop",
+            "timeout": 3
+          },
           {
             "type": "command",
             "command": "scripts/verify-deliverables.sh",

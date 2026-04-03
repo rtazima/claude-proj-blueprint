@@ -189,7 +189,7 @@
     <div class="timeline-list" id="timelineList">
       <div class="empty-state" id="timelineEmpty">
         <span>No events yet</span>
-        <span style="font-size:11px">Watching logs/agent-events.jsonl</span>
+        <span style="font-size:11px">Watching ../logs/agent-events.jsonl</span>
       </div>
     </div>
   </div>
@@ -506,11 +506,11 @@
   // Fetch and update
   async function fetchEvents() {
     try {
-      const resp = await fetch('logs/agent-events.jsonl?_=' + Date.now());
+      const resp = await fetch('../logs/agent-events.jsonl?_=' + Date.now());
       if (!resp.ok) {
         if (!state.fetchError) {
           state.fetchError = true;
-          $timelineEmpty.innerHTML = '<span>No events yet</span><span style="font-size:11px">Watching logs/agent-events.jsonl</span>';
+          $timelineEmpty.innerHTML = '<span>No events yet</span><span style="font-size:11px">Watching ../logs/agent-events.jsonl</span>';
           $timelineEmpty.style.display = 'flex';
         }
         return;
