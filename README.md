@@ -87,7 +87,7 @@ your-project/
 │   │   ├── deploy.md            ←      /deploy
 │   │   ├── spec-review.md       ←      /spec-review <path>
 │   │   └── memory.md            ←      /memory <search|index|stats>
-│   ├── hooks.json               ← L3+  Automated gates (7 hooks)
+│   ├── hooks.json               ← L3+  Automated gates (8 hooks)
 │   └── agents/                  ← L4+  Specialized sub-agents (4 agents)
 │       ├── security-auditor.md  ←      OWASP, injection, auth (opus)
 │       ├── compliance-auditor.md ←     LGPD, GDPR, HIPAA, PCI-DSS (opus)
@@ -106,6 +106,10 @@ your-project/
 │   ├── query.py                 ←      Semantic search CLI
 │   ├── config.yaml              ←      Configuration
 │   └── requirements.txt         ←      pip install -r memory/requirements.txt
+├── logs/                        ← L4+  Agent event logs
+│   └── agent-events.jsonl       ←      JSONL event stream (gitignored)
+├── tools/                       ← L4+  Developer tools
+│   └── agent-dashboard.html     ←      Web dashboard for agent monitoring
 └── scripts/
     ├── bootstrap.sh             ←      Level-based setup
     ├── lint-check.sh            ←      L3+ post-write hook
@@ -117,7 +121,9 @@ your-project/
     ├── pre-compact-save.sh      ←      L3+ save context before compaction
     ├── context-guard.sh         ←      L3+ warn on long conversations
     ├── verify-deliverables.sh   ←      L4 validate agent output
-    └── post-commit-index.sh     ←      L4 auto-index on commit
+    ├── post-commit-index.sh     ←      L4 auto-index on commit
+    ├── agent-events.sh          ←      L4 event protocol (JSONL emitter)
+    └── agent-monitor.sh         ←      L4 terminal dashboard (TUI)
 ```
 
 ## Spec Modules
@@ -177,6 +183,17 @@ Becomes:
 **L3 — Hooks** — Scripts that run before/after Claude uses tools. Lint on every file write. Security check before every bash command. Exit 0 = allow, exit 2 = block.
 
 **L4 — Agents** — Sub-agents with their own context (security, compliance, quality, performance). Run individually or as a coordinated team with the author-critic loop.
+
+**L4 — Agent Monitor** — Real-time observability for multi-agent sessions. Hooks emit structured JSONL events; two viewers consume them:
+
+```bash
+# Terminal dashboard (live, zero deps)
+./scripts/agent-monitor.sh
+
+# Web dashboard (visual graph + timeline)
+python3 -m http.server 8080
+# → http://localhost:8080/tools/agent-dashboard.html
+```
 
 **L4 — Memory** — Vector database indexes `docs/` and `src/` for semantic search. Ask "how did we handle rate limiting?" and get the relevant ADR, code, and PRD. Supports Chroma (local, default) or pgvector (shared, team-wide).
 

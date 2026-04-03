@@ -7,6 +7,22 @@ This project uses date-based releases (YYYY-MM-DD), not semver.
 
 ---
 
+## [2026-04-02] — Agent observability system
+
+### Added
+- **Agent Event Protocol** (`scripts/agent-events.sh`) — bash library with 8 typed emitter functions (agent:start, agent:progress, agent:complete, agent:finding, session:start, session:end, flow). Writes structured JSONL to `logs/agent-events.jsonl`. Atomic file locking for parallel agent safety. Inspired by ëther Desktop's node/synapse model, adapted to zero-deps bash.
+- **Terminal Dashboard** (`scripts/agent-monitor.sh`) — real-time TUI showing agents, status, findings, flow arrows, and timeline. Pure bash + awk, zero external deps. Supports `--once`, `--session`, `--clear` flags. ANSI color-coded.
+- **Web Dashboard** (`tools/agent-dashboard.html`) — single HTML file (547 lines, zero deps) with SVG agent graph, event timeline, findings panel. Dark theme. Auto-refreshes every 2s via fetch. Served via `python3 -m http.server`.
+- **Flow types** — 6 typed inter-agent flows: command (blue), data (green), audit (red), feedback (yellow), sync (purple), insight (gold). Visualized in both dashboards.
+- `logs/` directory and `tools/` directory added to project structure.
+
+### Changed
+- `verify-deliverables.sh` — now emits agent:start and agent:complete events to the event log.
+- `context-guard.sh` — now emits agent:finding events when thresholds are hit.
+- README.md — updated project structure (logs/, tools/, 2 new scripts), added Agent Monitor section to L4 docs.
+
+---
+
 ## [2026-04-01] — Full lifecycle coverage
 
 ### Added
