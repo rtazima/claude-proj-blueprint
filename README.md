@@ -59,7 +59,8 @@ your-project/
 ├── CLAUDE.md                    ← L1+  Hub — Claude reads this first
 ├── .claude/
 │   ├── settings.json            ← L1+  Permissions & safety
-│   ├── skills/                  ← L2+  Auto-invoked knowledge packs (16 skills)
+│   ├── output-styles/            ← L2+  Communication style presets (direct, verbose)
+│   ├── skills/                  ← L2+  Auto-invoked knowledge packs (18 skills)
 │   │   ├── implement-prd/       ←      Implement from PRD
 │   │   ├── prd-writer/          ←      Draft/refine PRDs from rough ideas
 │   │   ├── debugger/            ←      Systematic debugging workflow
@@ -74,6 +75,8 @@ your-project/
 │   │   ├── slop-cleaner/        ←      Remove AI-generated code noise
 │   │   ├── learner/             ← L4   Extract patterns to improve skills
 │   │   ├── adr/                 ←      Architecture Decision Records
+│   │   ├── intent-markers/       ←      :PERF:/:UNSAFE:/:SCHEMA: code annotations
+│   │   ├── incoherence-detector/ ←     Spec vs docs vs code mismatch finder
 │   │   ├── memory/              ← L4   Long-term memory retrieval
 │   │   └── _template-skill/     ←      Create your own
 │   ├── commands/                ← L2+  Slash commands (10 commands)
@@ -97,6 +100,8 @@ your-project/
 │   ├── product/                 ←      PRDs, vision, roadmap
 │   ├── architecture/            ←      ADRs (decision records)
 │   ├── specs/                   ←      Modular spec modules
+│   │   ├── conventions/          ←      Convention registry (role-phase mapping)
+│   │   ├── documentation-standards.md ← Token budgets, invisible knowledge test
 │   │   └── deliverables/        ← L4   Agent output validation schemas
 │   ├── design-flow-guide.md     ←      Figma vs Agent vs Hybrid decision
 │   └── runbooks/                ←      Deploy, debug, post-mortems

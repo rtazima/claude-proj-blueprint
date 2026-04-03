@@ -1,0 +1,158 @@
+# Convention Registry — maps conventions to agent roles by phase
+# Each agent receives only the conventions relevant to its task.
+# This prevents context pollution and ensures focused review.
+#
+# Roles: lead, security-auditor, compliance-auditor, quality-guardian, performance-auditor
+# Phases: plan, implement, review, deploy
+#
+# Format:
+#   role:
+#     always: [conventions loaded in every phase]
+#     phases:
+#       phase_name: [additional conventions for this phase]
+
+roles:
+  lead:
+    always:
+      - code-conventions      # From CLAUDE.md Code Conventions section
+      - commit-conventions     # Conventional Commits (feat:, fix:, docs:, etc.)
+      - documentation-rules    # Documentation update checklist
+      - intent-markers         # :PERF:, :UNSAFE:, :SCHEMA:, etc.
+    phases:
+      plan:
+        - architecture         # ADR format, module boundaries
+        - api-conventions      # API spec module (if enabled)
+      implement:
+        - testing-strategy     # Test pyramid, coverage requirements
+        - error-handling       # Never break listener loop, etc.
+      review:
+        - code-quality         # Naming, structure, patterns
+        - temporal-present     # No change-history in comments
+      deploy:
+        - deploy-checklist     # Pre-deploy verification steps
+        - rollback-plan        # Rollback strategy
+
+  security-auditor:
+    always:
+      - security-spec          # docs/specs/security/
+      - intent-markers         # Focus on :SECURITY: and :UNSAFE:
+    phases:
+      review:
+        - owasp-top10          # Injection, auth, XSS, etc.
+        - secrets-management   # No hardcoded secrets
+        - dependency-audit     # Known vulnerabilities
+
+  compliance-auditor:
+    always:
+      - compliance-spec        # docs/specs/compliance/
+    phases:
+      review:
+        - data-privacy         # LGPD, GDPR requirements
+        - audit-trail          # Logging, traceability
+        - consent-management   # User consent flows
+
+  quality-guardian:
+    always:
+      - testing-strategy       # docs/specs/testing-strategy/
+      - documentation-rules    # Documentation completeness
+    phases:
+      review:
+        - code-quality         # All 8 dimensions
+        - test-coverage        # Coverage thresholds
+        - temporal-present     # Comment quality
+        - definition-of-done   # Acceptance criteria check
+
+  performance-auditor:
+    always:
+      - scalability-spec       # docs/specs/scalability/
+    phases:
+      review:
+        - query-optimization   # N+1, missing indexes
+        - caching-strategy     # Cache invalidation, TTL
+        - payload-sizes        # Response size limits
+        - pagination           # Unbounded queries
+
+# ─── Convention Definitions ───────────────────────────────────
+# Reference for what each convention key maps to:
+conventions:
+  code-conventions:
+    source: "CLAUDE.md#code-conventions"
+    description: "Style, types, naming from project CLAUDE.md"
+  commit-conventions:
+    source: "CLAUDE.md#code-conventions"
+    description: "Conventional Commits format"
+  documentation-rules:
+    source: "CLAUDE.md#documentation-rules"
+    description: "What to update when code changes"
+  intent-markers:
+    source: ".claude/skills/intent-markers/SKILL.md"
+    description: "Inline :PERF:/:UNSAFE:/:SCHEMA: annotations"
+  architecture:
+    source: "docs/architecture/"
+    description: "ADR format and architectural principles"
+  api-conventions:
+    source: "docs/specs/api/README.md"
+    description: "REST/GraphQL conventions, error format"
+  testing-strategy:
+    source: "docs/specs/testing-strategy/"
+    description: "Test pyramid, coverage, mock strategy"
+  error-handling:
+    source: "CLAUDE.md#gotchas"
+    description: "Project-specific error handling rules"
+  code-quality:
+    source: "docs/specs/conventions/code-quality.md"
+    description: "Naming, structure, patterns, repetition, docs, modules"
+  temporal-present:
+    source: ".claude/skills/slop-cleaner/SKILL.md#category-8"
+    description: "Comments describe current state, not change history"
+  deploy-checklist:
+    source: "docs/runbooks/"
+    description: "Pre-deploy verification steps"
+  rollback-plan:
+    source: "docs/runbooks/"
+    description: "Rollback procedures"
+  security-spec:
+    source: "docs/specs/security/"
+    description: "Security policies and requirements"
+  compliance-spec:
+    source: "docs/specs/compliance/"
+    description: "Legal and regulatory requirements"
+  scalability-spec:
+    source: "docs/specs/scalability/"
+    description: "Performance requirements and limits"
+  owasp-top10:
+    source: "docs/specs/security/"
+    description: "OWASP Top 10 vulnerability checks"
+  secrets-management:
+    source: "docs/specs/security/"
+    description: "Secret storage and rotation policies"
+  dependency-audit:
+    source: "docs/specs/security/"
+    description: "Dependency vulnerability scanning"
+  data-privacy:
+    source: "docs/specs/compliance/"
+    description: "Data protection requirements"
+  audit-trail:
+    source: "docs/specs/compliance/"
+    description: "Audit logging requirements"
+  consent-management:
+    source: "docs/specs/compliance/"
+    description: "User consent tracking"
+  test-coverage:
+    source: "docs/specs/testing-strategy/"
+    description: "Coverage thresholds per module"
+  definition-of-done:
+    source: "docs/specs/testing-strategy/"
+    description: "Acceptance criteria verification"
+  query-optimization:
+    source: "docs/specs/scalability/"
+    description: "Database query patterns and anti-patterns"
+  caching-strategy:
+    source: "docs/specs/scalability/"
+    description: "Cache policies, invalidation, TTL"
+  payload-sizes:
+    source: "docs/specs/scalability/"
+    description: "Response size limits and pagination"
+  pagination:
+    source: "docs/specs/scalability/"
+    description: "Cursor vs offset pagination"

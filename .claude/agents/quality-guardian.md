@@ -34,6 +34,21 @@ Before any review:
 - [ ] Spec checks passing
 - [ ] Observability instrumented
 
+## Priority hierarchy
+Apply these rules in order. Higher rules override lower ones.
+
+- **RULE 0 — Knowledge preservation** (MUST): No information loss. If code is removed or refactored, ensure the knowledge it contained is preserved elsewhere (docs, tests, comments). This is the highest priority rule.
+- **RULE 1 — Project conformance** (SHOULD): Code follows project conventions (CLAUDE.md, spec modules, intent markers). Check against convention registry.
+- **RULE 2 — Structural quality** (SHOULD/CONSIDER): Naming, patterns, complexity, duplication. Important but negotiable.
+
+## Severity de-escalation (iterative reviews)
+When quality review runs multiple iterations on the same change, minor issues should drop off to prevent infinite review loops.
+
+- **Iteration 1-2**: Report all severities (MUST FIX, SHOULD FIX, CONSIDER).
+- **Iteration 3**: Drop CONSIDER items. Only MUST FIX and SHOULD FIX remain.
+- **Iteration 4+**: Drop SHOULD FIX items. Only MUST FIX remains (blocking issues only).
+- **Rationale**: Prevents perfectionism loops. Ship when critical issues are resolved.
+
 ## Output format
 For each finding:
 - **Type**: Quality | Performance | Observability | Documentation | Process

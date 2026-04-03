@@ -7,6 +7,21 @@ This project uses date-based releases (YYYY-MM-DD), not semver.
 
 ---
 
+## [2026-04-02] — Conventions, quality gates, and incoherence detection
+
+### Added
+- **Intent markers skill** (`.claude/skills/intent-markers/`) — 6 inline code annotations (`:PERF:`, `:UNSAFE:`, `:SCHEMA:`, `:SECURITY:`, `:HACK:`, `:FLAKY:`) that flag areas needing special review attention. Grep-able across codebase.
+- **Incoherence detector skill** (`.claude/skills/incoherence-detector/`) — 5-phase workflow to find mismatches between specs, docs, and code. Classifies as DRIFT, MISSING, STALE, CONFLICT, or ORPHAN.
+- **Convention registry** (`docs/specs/conventions/REGISTRY.yaml`) — YAML mapping of which conventions each agent role receives per phase (plan/implement/review/deploy). 26 convention definitions.
+- **Documentation standards** (`docs/specs/documentation-standards.md`) — Token budgets per file type (CLAUDE.md ≤200 tokens, README ≤500 tokens, ADRs ≤300 words). Includes invisible knowledge test.
+- **Output style presets** (`.claude/output-styles/`) — Swappable communication styles: `direct.md` (terse, no hedging) and `verbose.md` (step-by-step with alternatives).
+
+### Changed
+- **Quality guardian** — added 3-rule priority hierarchy (RULE 0: knowledge preservation > RULE 1: project conformance > RULE 2: structural quality) and severity de-escalation (CONSIDER drops at iteration 3, SHOULD FIX drops at iteration 4+).
+- **Slop cleaner** — added Category 8: temporal contamination. Detects LLM comments that leak change history ("Added mutex to fix...") instead of describing current state ("Mutex serializes access").
+
+---
+
 ## [2026-04-02] — Agent observability system
 
 ### Added

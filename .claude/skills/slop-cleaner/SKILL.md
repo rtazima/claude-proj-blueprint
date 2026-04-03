@@ -67,6 +67,31 @@ different passes — never self-approve a cleanup.
 - [ ] "For security purposes" / "for performance reasons" without specifics
 - [ ] Excessively polite code comments: "Please note that..."
 
+### 8. Temporal contamination
+Comments should describe what the code does NOW, not why it was changed.
+Code is read in a timeless present — change history belongs in git, not in source.
+
+- [ ] Past tense verbs in comments: "Added", "Fixed", "Changed", "Refactored", "Updated", "Removed", "Moved", "Replaced", "Converted"
+- [ ] Change-tracking language: "now uses", "no longer", "instead of", "was previously", "used to be"
+- [ ] PR/commit language in code: "as per review", "per discussion", "as requested"
+- [ ] Comments that explain the diff rather than the current state
+
+**BAD** (temporal contamination):
+```
+// Added mutex to fix race condition in user cache
+// Refactored to use factory pattern for better testability
+// Changed from array to Set for O(1) lookup performance
+// Fixed bug where null users caused crash
+```
+
+**GOOD** (timeless present):
+```
+// Mutex serializes concurrent cache access
+// Factory pattern decouples creation from usage
+// Set provides O(1) membership checks
+// Guard clause rejects null users before processing
+```
+
 ## Language-specific patterns
 [SPEC] Add patterns for your stack:
 
