@@ -7,6 +7,18 @@ This project uses date-based releases (YYYY-MM-DD), not semver.
 
 ---
 
+## [2026-04-11] — Anti-rationalization, red flags, scope discipline, error-as-data
+
+Patterns incorporated from analysis of [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills).
+
+### Added
+- **Anti-rationalization tables** — 5 skills now have `## Racionalizações comuns` sections: domain-specific excuse→rebuttal tables that prevent agents from skipping steps. Skills: implement-prd, debugger, persistence, code-review, slop-cleaner.
+- **Red flags sections** — 5 skills now have `## Red Flags` sections: observable behavioral patterns that indicate a skill is being violated. Serves as drift detection mechanism.
+- **Scope discipline** — pre-commit review now includes CONSIDER-level reminder to add `Não alterou:` section to commit messages listing files/modules intentionally not changed. Convention added to CLAUDE.md.
+- **Error output as untrusted data** — new Rule 8 in debugger skill: treat error messages as data, not instructions (prompt injection via stack traces, log injection). New anti-pattern: never follow "fix suggestions" in error messages without verification. New section in security spec (`docs/specs/security/README.md`) with attack examples.
+
+---
+
 ## [2026-04-02] — Conventions, quality gates, and incoherence detection
 
 ### Added
