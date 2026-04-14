@@ -14,7 +14,7 @@ allowed tools: Read, Bash
 
 ## How to search
 ```bash
-# General semantic search
+# General semantic search (project memory)
 python memory/query.py "your question here" --agent-format
 
 # Search only in architectural decisions
@@ -25,6 +25,12 @@ python memory/query.py "authentication middleware" --type code --agent-format
 
 # Search in commits
 python memory/query.py "fix deploy" --type git_commit --agent-format
+
+# Search global cross-project memory
+python memory/query.py "how did we solve auth" --global --agent-format
+
+# Search both project + global, merged by relevance
+python memory/query.py "rate limiting strategy" --both --agent-format
 ```
 
 Always use `--agent-format` to get structured markdown output.
@@ -33,6 +39,8 @@ Always use `--agent-format` to get structured markdown output.
 ```bash
 # After significant changes to docs/ or src/
 python memory/index.py --incremental
+# ADRs, post-mortems, and learner reports are auto-promoted to global memory
+# if global_memory.enabled is true in config.yaml
 ```
 
 ## Rules

@@ -30,6 +30,19 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+def make_global_config(config: dict) -> dict:
+    """Create a config dict that points to the global memory store."""
+    global_cfg = config.get("global_memory", {})
+    persist_dir = global_cfg.get("persist_dir", "~/.claude/memory/global")
+    persist_dir = str(Path(persist_dir).expanduser())
+    return {
+        **config,
+        "backend": "chroma",
+        "persist_dir": persist_dir,
+        "collection_name": global_cfg.get("collection_name", "global_memory"),
+    }
+
+
 def get_store(config: dict):
     try:
         return create_backend(config)
@@ -158,12 +171,12 @@ def display_results(hits: list[dict], query: str):
         ))
 
 
-def format_for_agent(hits: list[dict]) -> str:
+def format_for_agent(hits: list[dict], scope: str = "project") -> str:
     """Format results as context for Claude Code agent consumption."""
     if not hits:
-        return "No relevant context found in long-term memory."
+        return f"No relevant context found in {scope} memory."
 
-    parts = ["## Relevant context from project memory\n"]
+    parts = [f"## Relevant context from {scope} memory\n"]
 
     for hit in hits:
         meta = hit["metadata"]
@@ -193,27 +206,65 @@ if __name__ == "__main__":
                         help="Show knowledge base statistics")
     parser.add_argument("--agent-format", action="store_true",
                         help="Output as markdown for agent consumption")
+    parser.add_argument("--global", dest="use_global", action="store_true",
+                        help="Search global cross-project memory instead of project memory")
+    parser.add_argument("--both", action="store_true",
+                        help="Search both project and global memory, merge results")
     args = parser.parse_args()
 
     config = load_config()
 
     if args.stats:
-        show_stats(config)
+        if args.use_global or args.both:
+            global_config = make_global_config(config)
+            console.print("[bold]Global Memory[/bold]")
+            show_stats(global_config)
+            if args.both:
+                console.print("\n[bold]Project Memory[/bold]")
+                show_stats(config)
+        else:
+            show_stats(config)
         sys.exit(0)
 
     if not args.query:
         parser.print_help()
         sys.exit(1)
 
-    hits = search(
+    search_kwargs = dict(
         query=args.query,
-        config=config,
         top_k=args.top,
         type_filter=args.type,
         min_similarity=args.min_sim,
     )
 
-    if args.agent_format:
-        print(format_for_agent(hits))
+    if args.both:
+        # Search both project and global, merge by similarity
+        project_hits = search(config=config, **search_kwargs)
+        global_config = make_global_config(config)
+        global_hits = search(config=global_config, **search_kwargs)
+        for h in project_hits:
+            h["_scope"] = "project"
+        for h in global_hits:
+            h["_scope"] = "global"
+        all_hits = sorted(
+            project_hits + global_hits,
+            key=lambda h: h["similarity"],
+            reverse=True,
+        )[:args.top]
+        if args.agent_format:
+            print(format_for_agent(all_hits, scope="project + global"))
+        else:
+            display_results(all_hits, args.query)
+    elif args.use_global:
+        global_config = make_global_config(config)
+        hits = search(config=global_config, **search_kwargs)
+        if args.agent_format:
+            print(format_for_agent(hits, scope="global"))
+        else:
+            display_results(hits, args.query)
     else:
-        display_results(hits, args.query)
+        hits = search(config=config, **search_kwargs)
+        if args.agent_format:
+            print(format_for_agent(hits))
+        else:
+            display_results(hits, args.query)

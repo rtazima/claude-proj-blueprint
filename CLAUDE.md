@@ -170,5 +170,9 @@ Long-term semantic search via vector DB. See `docs/specs/long-term-memory/`.
 - Index: `python memory/index.py`
 - Search: `python memory/query.py "query"`
 - Incremental: `python memory/index.py --incremental`
+- Global (cross-project): `python memory/query.py "query" --global`
+- Both (merged): `python memory/query.py "query" --both`
+- Learn from conversations: `/learn --conversations 5`
 - Config: `memory/config.yaml`
 - Skill auto-activated when referencing past decisions or historical context
+- Global memory auto-promotes ADRs, post-mortems, and learner reports to `~/.claude/memory/global/`

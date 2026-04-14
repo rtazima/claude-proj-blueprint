@@ -71,6 +71,34 @@ For long sessions:
 - Reference the notes file instead of keeping everything in context
 - The `pre-compact-save` hook auto-saves before compaction
 
+### 6. Tiered lookup (query before reading)
+Before reading raw source code, exhaust cheaper context sources first:
+
+```
+Layer 1: Memory (semantic search)
+  python memory/query.py "your question" --agent-format
+  → May have the answer from ADRs, post-mortems, past code
+  → Cost: ~50 tokens for the query + results
+
+Layer 2: Docs (specs, ADRs, runbooks)
+  Grep docs/ for keywords
+  → Structured knowledge, already summarized
+  → Cost: ~200 tokens per relevant section
+
+Layer 3: Code (src/)
+  Read the specific file + its test
+  → Raw context, highest fidelity but highest cost
+  → Cost: ~500-2000 tokens per file
+
+Layer 4: Global memory (cross-project, if enabled)
+  python memory/query.py "your question" --global --agent-format
+  → Decisions from OTHER projects that may apply here
+  → Cost: ~50 tokens, but lower relevance
+```
+
+**Rule**: Only descend to the next layer if the previous one didn't answer the question.
+Most implementation questions are answered at Layer 2 (docs). Only edge cases need Layer 3 (code).
+
 ## When to apply
 
 | Signal | Action |

@@ -12,13 +12,35 @@ CLAUDE.md lasts a single session. Obsidian lasts forever, but needs to be read i
 → Agent receives precise context without reading 200 files
 ```
 
-## Memory architecture (3 layers)
+## Memory architecture (4 layers)
 
 | Layer | Storage | Duration | What it stores | Search |
 |-------|---------|----------|---------------|--------|
 | Short-term | CLAUDE.md | Session | Stack, conventions, gotchas | Claude reads it whole |
 | Mid-term | docs/ (Obsidian) | Permanent (Git) | PRDs, ADRs, specs, runbooks | Grep, links |
-| Long-term | Vector DB | Permanent | Embeddings of everything | Semantic |
+| Long-term | Vector DB (project) | Permanent | Embeddings of project files | Semantic |
+| Cross-project | Vector DB (global) | Permanent | ADRs, post-mortems, learner reports from ALL projects | Semantic (`--global`) |
+
+### Cross-project memory
+Decisions made in one project often apply to others. The global memory layer stores
+ADRs, post-mortems, and learner reports from every project that has it enabled.
+Lives at `~/.claude/memory/global/` (shared across all projects on the machine).
+
+**What gets promoted to global** (configurable in `config.yaml`):
+- ADRs — architectural decisions transfer across projects
+- Post-mortems — lessons learned are universal
+- Learner reports — extracted patterns benefit all projects
+
+**What stays project-only**:
+- Code — too project-specific to be useful elsewhere
+- PRDs — product requirements are project-scoped
+- Git commits — too granular for cross-project value
+
+**Usage**:
+```bash
+python memory/query.py "rate limiting" --global --agent-format   # global only
+python memory/query.py "rate limiting" --both --agent-format     # merged results
+```
 
 ## Recommended stack
 

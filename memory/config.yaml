@@ -68,3 +68,26 @@ min_similarity: 0.3
 
 # Collection name in vector DB
 collection_name: project_memory
+
+# ===========================================================================
+# Cross-project memory (global)
+# ===========================================================================
+# A shared memory layer across ALL projects. Stores decisions, patterns, and
+# insights that transcend individual projects (e.g., "how did we solve auth
+# in project A" is useful in project B).
+#
+# Global memory lives in a fixed location (~/.claude/memory/) instead of
+# per-project memory/.chroma/. Both can coexist — search with --global flag.
+global_memory:
+  enabled: false                       # [SPEC] set to true to enable
+  persist_dir: ~/.claude/memory/global  # shared across all projects
+  collection_name: global_memory
+  # What gets indexed into global memory (vs project memory):
+  # - ADRs (architectural decisions transfer across projects)
+  # - Post-mortems (lessons learned are universal)
+  # - Learner reports (extracted patterns)
+  # Project-specific code and PRDs stay in project memory only.
+  sources:
+    - type: adr
+    - type: post_mortem
+    - type: learner_report

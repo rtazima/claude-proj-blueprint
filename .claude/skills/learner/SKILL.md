@@ -88,8 +88,53 @@ Write a structured report:
 2. Ask which suggestions to adopt
 3. If approved, create/modify the relevant skills, CLAUDE.md, or hooks
 
+## Phase 5: Conversation mining (optional, `--conversations N`)
+
+Mine past Claude Code session transcripts for decisions, patterns, and insights
+that weren't captured in commits or docs.
+
+### How it works
+1. Find recent session transcripts: `~/.claude/projects/{project-hash}/*.jsonl`
+2. Read the last N transcripts (default: 5)
+3. Extract from each:
+   - **Decisions made** — architectural choices, trade-offs discussed
+   - **Patterns repeated** — same type of question asked across sessions
+   - **Errors encountered** — recurring issues that should be Gotchas
+   - **Knowledge gaps** — things the agent didn't know that a human corrected
+   - **Workarounds** — solutions that worked but should be formalized
+
+### What to look for in transcripts
+
+| Signal | What it means | Action |
+|---|---|---|
+| Human corrected the agent 3+ times on same topic | Missing convention or Gotcha | Add to CLAUDE.md Gotchas |
+| Same file read in every session | Core context the agent always needs | Add to CLAUDE.md Module Map or context-engineering hierarchy |
+| Agent asked "should I...?" repeatedly | Missing boundary in agent/skill | Add Always Do / Never Do rule |
+| Workaround described but never formalized | Missing skill or runbook | Propose new skill or add to existing |
+| Human shared external link for reference | Source-driven gap | Add to source-driven-development source table |
+
+### Output
+Append a `## Conversation insights` section to the learner report:
+
+```markdown
+## Conversation insights (from N sessions)
+
+### Decisions not documented
+- [Decision] — found in session {date}, not in any ADR
+  - **Suggestion**: create ADR-{N} or add to CLAUDE.md
+
+### Recurring corrections
+- [Topic] — human corrected agent {count} times across {sessions} sessions
+  - **Suggestion**: add Gotcha or skill rule
+
+### Knowledge gaps
+- [Gap] — agent didn't know [X], human provided [reference]
+  - **Suggestion**: add to source-driven-development table or CLAUDE.md
+```
+
 ## Configuration
 - Analysis scope: [SPEC] `--since "2 weeks ago"` or `--commits 20`
+- Conversation scope: `--conversations N` (default: 5 most recent transcripts)
 - Minimum pattern frequency: 3 (to suggest as a skill)
 - Output: `docs/architecture/learner-report-{date}.md`
 
@@ -97,3 +142,4 @@ Write a structured report:
 - Inspired by oh-my-claudecode's Learner skill (level 7)
 - See `.claude/skills/_template-skill/SKILL.md` for new skill format
 - See `CLAUDE.md` for current conventions
+- Cross-project insight: conversation mining concept from lucasrosati/claude-code-memory-setup

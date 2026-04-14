@@ -174,6 +174,102 @@ def save_state(state: dict):
 # Main indexing logic
 # ---------------------------------------------------------------------------
 
+def make_global_config(config: dict) -> dict:
+    """Create a config dict that points to the global memory store."""
+    global_cfg = config.get("global_memory", {})
+    persist_dir = global_cfg.get("persist_dir", "~/.claude/memory/global")
+    persist_dir = str(Path(persist_dir).expanduser())
+    return {
+        **config,
+        "backend": "chroma",
+        "persist_dir": persist_dir,
+        "collection_name": global_cfg.get("collection_name", "global_memory"),
+    }
+
+
+GLOBAL_TYPES = {"adr", "post_mortem", "learner_report"}
+
+
+def promote_to_global(config: dict):
+    """Copy ADRs, post-mortems, and learner reports into the global memory.
+
+    This runs after a normal project index and copies chunks whose type is in
+    GLOBAL_TYPES to the shared cross-project store.  The global store lives at
+    a fixed path (~/.claude/memory/global) so all projects can search it.
+    """
+    global_cfg = config.get("global_memory", {})
+    if not global_cfg.get("enabled", False):
+        return
+
+    console.print("\n[bold]Promoting to global memory...[/bold]")
+    project_store = create_backend(config)
+    global_config = make_global_config(config)
+
+    # Ensure global persist dir exists
+    Path(global_config["persist_dir"]).mkdir(parents=True, exist_ok=True)
+    global_store = create_backend(global_config)
+
+    from sentence_transformers import SentenceTransformer
+    model = SentenceTransformer(config["embedding_model"])
+
+    promoted = 0
+    all_metadatas = project_store.get_all_metadatas()
+
+    allowed_types = set(
+        t["type"] for t in global_cfg.get("sources", [])
+    ) or GLOBAL_TYPES
+
+    for meta in all_metadatas:
+        doc_type = meta.get("type", "unknown")
+        if doc_type not in allowed_types:
+            continue
+
+        source = meta.get("source", "")
+        project_root = Path(__file__).parent.parent.resolve()
+        project_name = project_root.name
+
+        # Prefix ID with project name for cross-project uniqueness
+        global_id = f"{project_name}::{source}::chunk-{meta.get('chunk_index', 0)}"
+
+        # Get the document text from project store
+        try:
+            result = project_store.get(
+                where={"source": source},
+            )
+            if not result["documents"]:
+                continue
+
+            for i, doc_text in enumerate(result["documents"]):
+                chunk_id = f"{project_name}::{source}::chunk-{i}"
+
+                # Delete old version if exists
+                try:
+                    existing = global_store.get(ids=[chunk_id])
+                    if existing["ids"]:
+                        global_store.delete(ids=[chunk_id])
+                except Exception:
+                    pass
+
+                embedding = model.encode(doc_text[:8000]).tolist()
+                global_store.add(
+                    ids=[chunk_id],
+                    embeddings=[embedding],
+                    documents=[doc_text[:8000]],
+                    metadatas=[{
+                        **meta,
+                        "project": project_name,
+                        "chunk_index": i,
+                    }],
+                )
+                promoted += 1
+        except Exception:
+            continue
+
+    console.print(f"  Promoted [bold]{promoted}[/bold] chunks to global memory")
+    console.print(f"  Global store: {global_config['persist_dir']}")
+    console.print(f"  Total global chunks: {global_store.count()}")
+
+
 def index_project(
     incremental: bool = False,
     source_filter: str | None = None,
@@ -327,6 +423,9 @@ def index_project(
     console.print(f"  Skipped: {skipped} files (unchanged)")
     console.print(f"  Total chunks in DB: {total}")
     console.print(f"  State saved to: {STATE_FILE.name}\n")
+
+    # Promote ADRs, post-mortems, learner reports to global memory
+    promote_to_global(config)
 
 
 # ---------------------------------------------------------------------------

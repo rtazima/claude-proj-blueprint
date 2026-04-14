@@ -7,6 +7,27 @@ This project uses date-based releases (YYYY-MM-DD), not semver.
 
 ---
 
+## [2026-04-13] — Cross-project memory, conversation mining, tiered lookup
+
+Patterns extracted from analysis of [lucasrosati/claude-code-memory-setup](https://github.com/lucasrosati/claude-code-memory-setup).
+
+### Added
+- **Cross-project memory** — global memory layer at `~/.claude/memory/global/` shared across all projects. ADRs, post-mortems, and learner reports auto-promote from project to global memory on index. Search with `--global` or `--both` (merged by relevance). Config via `global_memory` section in `memory/config.yaml`. Enables "how did we solve X in project A?" from project B.
+- **Conversation mining** — new Phase 5 in learner skill + `--conversations N` flag in `/learn` command. Mines past Claude session transcripts (`~/.claude/projects/`) for undocumented decisions, recurring corrections, knowledge gaps, and workarounds that should be formalized. Signal→Action table for what to look for in transcripts.
+- **Tiered lookup** — new technique #6 in context-engineering skill. 4-layer hierarchy: memory (semantic search, ~50 tokens) → docs (grep, ~200 tokens) → code (read file, ~500-2000 tokens) → global memory (cross-project, ~50 tokens). Rule: only descend if previous layer didn't answer.
+
+### Changed
+- `memory/index.py` — added `promote_to_global()` function: after project indexing, copies ADR/post-mortem/learner chunks to global store with project name prefix for uniqueness.
+- `memory/query.py` — added `--global` and `--both` CLI flags. `--both` merges project + global results sorted by similarity. `format_for_agent()` now includes scope label.
+- `memory/config.yaml` — added `global_memory` section (enabled: false by default, configurable persist_dir and source types).
+- `.claude/commands/memory.md` — documented `--global` and `--both` flags.
+- `.claude/commands/learn.md` — documented `--conversations N` flag.
+- `.claude/skills/memory/SKILL.md` — added global search examples.
+- `docs/specs/long-term-memory/README.md` — expanded from 3-layer to 4-layer architecture. Added cross-project memory section with what promotes vs what stays project-only.
+- `CLAUDE.md` — Memory section updated with global/both/conversations commands.
+
+---
+
 ## [2026-04-11] — Agent discipline: anti-rationalization, boundaries, new skills
 
 Patterns incorporated from analysis of [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills).
