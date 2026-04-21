@@ -7,6 +7,31 @@ This project uses date-based releases (YYYY-MM-DD), not semver.
 
 ---
 
+## [2026-04-21] — Claude Design integration
+
+Anthropic launched Claude Design (research preview, Pro/Max/Team/Enterprise).
+Its "Send to Claude Code" button produces a `PROMPT.md` bundle — a native
+Claude-Code handoff that the Blueprint now reconciles against PRD + CLAUDE.md.
+
+### Added
+- **`claude-design-handoff` skill** (`.claude/skills/claude-design-handoff/SKILL.md`) — parses PROMPT.md from Claude Design, reconciles against PRD and CLAUDE.md, produces reconciliation report before coding. Strict precedence: PRD > CLAUDE.md > PROMPT.md (never silently adopt PROMPT.md conventions). Includes Racionalizações + Red Flags sections.
+- **Option A — Claude Design flow** in design section of CLAUDE.md and `docs/design-flow-guide.md`. Existing Figma flow becomes Option B, Agent flow becomes Option C, Hybrid becomes Option D with auto-detection of artifact type per PRD.
+- **`docs/design/` convention** — location for `<prd-slug>-PROMPT.md` bundles from Claude Design.
+- **Security posture section** (`docs/specs/security/README.md`) — data review checklist before enabling Claude Design, treatment of PROMPT.md as untrusted data, policy recommendations on commit vs. gitignore.
+- **Bootstrap option 1** — `./scripts/bootstrap.sh --design claude-design` scaffolds skill + directory + CLAUDE.md marker.
+
+### Changed
+- `.claude/commands/implement.md` — design flow detection reorders: PROMPT.md first, Figma link second, agent fallback last.
+- `docs/design-flow-guide.md` — expanded from 3 to 4 flows, added Claude Design trade-offs table, decision checklist updated with Claude Design questions, manual setup instructions extended.
+- `scripts/bootstrap.sh` — prompt expanded from 4 to 5 options (added Claude Design at position 1), hybrid flow now sets up all three sources.
+- `CLAUDE.md` — Design section reorganized around 4 options with explicit precedence rule.
+
+### Not decided yet (waiting on Anthropic)
+- MCP server for Claude Design — roadmap but not shipped. Handoff is file-based until then.
+- Programmatic API for CI/CD — design generation still manual via UI.
+
+---
+
 ## [2026-04-13] — Cross-project memory, conversation mining, tiered lookup
 
 Patterns extracted from analysis of [lucasrosati/claude-code-memory-setup](https://github.com/lucasrosati/claude-code-memory-setup).

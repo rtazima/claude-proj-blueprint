@@ -1,4 +1,4 @@
-# Design Flow Guide — Figma, Agent, or Hybrid?
+# Design Flow Guide — Claude Design, Figma, Agent, or Hybrid?
 
 > How to decide your team's UI implementation strategy.
 > This guide helps you choose the right flow **before** running `bootstrap.sh`.
@@ -9,35 +9,74 @@
 
 Every project with a UI needs to answer one question:
 
-**Who translates the product vision into visual interface — a human designer or an AI agent?**
+**Who translates the product vision into visual interface — Claude Design, a human designer in Figma, or a pure code agent?**
 
 There is no universal answer. It depends on your team, your product, and your users.
 
 ```
-                    ┌─────────────────────────┐
-                    │    Does your team have   │
-                    │    a dedicated designer?  │
-                    └────────┬────────┬────────┘
-                             │        │
-                            Yes       No
-                             │        │
-                    ┌────────▼──┐  ┌──▼────────┐
-                    │  Do they   │  │  Is visual │
-                    │  use Figma?│  │  polish a  │
-                    │            │  │  priority? │
-                    └──┬─────┬──┘  └──┬─────┬──┘
-                      Yes    No      Yes    No
-                       │      │       │      │
-                       ▼      ▼       ▼      ▼
-                    Figma  Hybrid  Hybrid  Agent
-                    flow    flow    flow   flow
+                    ┌──────────────────────────────┐
+                    │  Does your team use Claude   │
+                    │  Design or already use Figma? │
+                    └──────┬────────┬───────┬──────┘
+                           │        │       │
+                     Claude Design  Figma   Neither
+                           │        │       │
+                    ┌──────▼──┐ ┌───▼───┐ ┌─▼────────┐
+                    │ Option A│ │Option B│ │  Visual   │
+                    │ Claude  │ │ Figma  │ │  polish   │
+                    │ Design  │ │ flow   │ │  priority?│
+                    └─────────┘ └────────┘ └─┬─────┬──┘
+                                            Yes    No
+                                             │      │
+                                             ▼      ▼
+                                         Hybrid  Option C
+                                        (A + C)   Agent
 ```
 
 ---
 
-## The three flows
+## The four flows
 
-### Flow A — Figma
+### Flow A — Claude Design
+
+```
+Claude Design generates design from codebase + brand → "Send to Claude Code" → PROMPT.md → /implement reconciles with PRD → code
+```
+
+**How it works:**
+1. Onboard Claude Design once per organization: it reads codebase + brand assets and builds a design system automatically.
+2. For each new screen or flow, prompt Claude Design to generate a prototype (designer or PM can do this).
+3. Click "Send to Claude Code" — Claude Design produces a `PROMPT.md` bundle (stack, conventions, screens, components, tokens).
+4. Save the bundle at `docs/design/<prd-slug>-PROMPT.md` in the repo (or keep out via `.gitignore` per team preference).
+5. Dev runs `/implement docs/product/<prd-slug>.md`.
+6. `claude-design-handoff` skill activates: parses PROMPT.md, reconciles against CLAUDE.md conventions and PRD scope, produces a reconciliation report, asks for decisions on conflicts.
+7. Code gets generated with PRD as contract, CLAUDE.md as convention, PROMPT.md as visual/UX spec.
+
+**Best for:**
+- Teams already using Claude Pro, Max, Team, or Enterprise
+- Full Anthropic stack (Claude Code + Claude Design) — single vendor, unified handoff
+- Teams without dedicated designer but wanting better visual output than pure-agent flow
+- Products where design iteration is prompt-driven (PM or founder "designs" by prompting)
+
+**What you need:**
+- Claude Design access (research preview, Pro/Max/Team/Enterprise)
+- Convention to save handoff bundles at `docs/design/<slug>-PROMPT.md`
+- `claude-design-handoff` skill active (`.claude/skills/claude-design-handoff/SKILL.md`)
+
+**Trade-offs:**
+| Pro | Con |
+|-----|-----|
+| Native Claude Code integration via handoff | Research preview — format may change |
+| Design system auto-built from codebase | No MCP yet — handoff is file-based, not programmatic |
+| Prompt-driven iteration, no Figma license needed | Design system lives in Anthropic cloud, not fully git-controlled |
+| PRD + PROMPT.md compose cleanly with strict precedence | Codebase is sent to Claude Design during onboarding — review security posture |
+| One-vendor stack reduces tooling sprawl | Less control than Figma for complex custom branding |
+
+**Security note:** Claude Design reads your codebase and brand assets during onboarding. Do not paste secrets, `.env` files, or proprietary algorithms. Treat the generated `PROMPT.md` as untrusted data (see `docs/specs/security/`).
+
+---
+
+### Flow B — Figma
 
 ```
 Designer creates in Figma → Dev Mode → /implement reads via MCP → code
@@ -72,7 +111,7 @@ Designer creates in Figma → Dev Mode → /implement reads via MCP → code
 
 ---
 
-### Flow B — Agent
+### Flow C — Agent
 
 ```
 PRD + design tokens → frontend agent → code
@@ -108,29 +147,32 @@ PRD + design tokens → frontend agent → code
 
 ---
 
-### Flow C — Hybrid
+### Flow D — Hybrid
 
 ```
-Complex/custom screens → Figma
-Standard screens → Agent
+Choose per-PRD: Claude Design | Figma | Agent
 ```
 
 **How it works:**
-1. Team decides per-feature: does this need custom design?
-2. If yes → designer creates in Figma, link goes in PRD
-3. If no → PRD describes requirements, agent generates from tokens
-4. `/implement` auto-detects the flow based on Figma link presence
+1. Team decides per-feature which flow to use.
+2. For custom branded screens → Claude Design (Flow A) or Figma (Flow B) produce the handoff/link.
+3. For CRUD/standard screens → Flow C (pure agent) uses tokens only.
+4. `/implement` auto-detects which flow to activate based on artifacts present in the PRD or `docs/design/`.
+
+**Detection order in `/implement`:**
+1. `docs/design/<prd-slug>-PROMPT.md` exists → Flow A (Claude Design)
+2. PRD has a Figma link → Flow B (Figma)
+3. Neither → Flow C (Agent)
 
 **Best for:**
-- Teams with a part-time or shared designer
-- Products with a strong design system but lots of CRUD screens
-- Scaling teams where the designer can't cover every screen
-- Teams transitioning from Figma-heavy to agent-driven
+- Teams with mixed design sources (some Claude Design, some Figma legacy)
+- Products with custom brand screens + lots of CRUD
+- Scaling teams where one source can't cover every screen
+- Teams transitioning between vendors
 
 **What you need:**
-- Everything from Flow A (Figma setup) + Flow B (tokens + component library)
-- A clear convention for which screens go through Figma
-- Documented in the PRD: "Design: see Figma" or "Design: use design system tokens"
+- Whatever combination of A + B + C artifacts you'll actually use
+- Clear convention per PRD documenting which flow each feature uses
 
 **Trade-offs:**
 | Pro | Con |
@@ -147,14 +189,16 @@ Answer these questions:
 
 | # | Question | If yes → |
 |---|----------|----------|
-| 1 | Do you have a designer on the team? | Consider Figma or Hybrid |
-| 2 | Is this a consumer-facing product where brand matters? | Lean toward Figma |
-| 3 | Is this an internal tool, dashboard, or admin panel? | Agent flow is enough |
-| 4 | Are you a solo dev or small team without design resources? | Agent flow |
-| 5 | Do you have a mature design system with tokens defined? | Agent or Hybrid |
-| 6 | Does your designer only cover key screens, not every page? | Hybrid |
-| 7 | Are you building an MVP to validate an idea fast? | Agent flow |
-| 8 | Do stakeholders need to approve visuals before dev starts? | Figma flow |
+| 1 | Do you already have Claude Pro/Max/Team/Enterprise? | Consider Claude Design (Flow A) |
+| 2 | Do you have a designer on the team using Figma? | Consider Figma (Flow B) or Hybrid |
+| 3 | Is this a consumer-facing product where brand matters? | Flow A or B |
+| 4 | Is this an internal tool, dashboard, or admin panel? | Flow C is enough |
+| 5 | Are you a solo dev or small team without design resources? | Flow A (if have Claude) or Flow C |
+| 6 | Do you have a mature design system with tokens defined? | Flow C or Hybrid |
+| 7 | Does your designer only cover key screens, not every page? | Hybrid |
+| 8 | Are you building an MVP to validate an idea fast? | Flow A or Flow C |
+| 9 | Do you want prompt-driven design iteration? | Flow A |
+| 10 | Is your codebase sensitive and cannot be sent to an AI service? | Flow B or Flow C (not A) |
 
 ---
 
@@ -170,15 +214,18 @@ The bootstrap script will ask:
 
 ```
 🎨 Design flow — how will UI be built?
-  1) Figma    — PRD + Figma link → code (team has a designer)
-  2) Agent    — PRD + design tokens → agent generates UI (no designer)
-  3) Hybrid   — Figma for complex screens, agent for the rest
+  1) Claude Design — Claude Design generates design → PROMPT.md handoff → code
+  2) Figma         — PRD + Figma link → code (team has a designer in Figma)
+  3) Agent         — PRD + design tokens → agent generates UI (no external design source)
+  4) Hybrid        — mix per PRD, auto-detected by /implement
+  5) None          — no UI in this project (backend/CLI/agent only)
 ```
 
 It automatically:
+- Enables the relevant skills (`claude-design-handoff`, `frontend-agent`)
 - Enables/disables the Figma MCP reference in `CLAUDE.md`
 - Activates the `design-system/` spec module
-- Configures the `frontend-agent` skill
+- Creates `docs/design/` if Flow A or Hybrid
 - Sets `[SPEC]` markers to fill for your choice
 
 ### Manual setup
@@ -187,8 +234,9 @@ If you already bootstrapped, enable manually:
 
 1. Choose your flow in `docs/specs/design-system/README.md`
 2. Fill in design tokens (at minimum: colors, typography, spacing)
-3. If using Figma: add MCP server config to `.claude/settings.json`
-4. If using Agent: review `.claude/skills/frontend-agent/SKILL.md`
+3. If using Claude Design: ensure `.claude/skills/claude-design-handoff/SKILL.md` is present and create `docs/design/`
+4. If using Figma: add MCP server config to `.claude/settings.json`
+5. If using Agent: review `.claude/skills/frontend-agent/SKILL.md`
 
 ---
 
@@ -196,15 +244,17 @@ If you already bootstrapped, enable manually:
 
 Regardless of which flow you choose, **design tokens are always defined**. They serve different purposes in each flow:
 
-| Token role | Figma flow | Agent flow |
-|------------|-----------|-----------|
-| Colors | Validation — code matches Figma colors | Generation — agent uses these to build UI |
-| Typography | Validation | Generation |
-| Spacing | Validation | Generation |
-| Radii/Shadows | Validation | Generation |
-| Breakpoints | Validation | Generation |
+| Token role | Claude Design (A) | Figma (B) | Agent (C) |
+|------------|------------------|-----------|-----------|
+| Colors | Seed on first use, validation after | Validation — code matches Figma | Generation — agent uses these to build UI |
+| Typography | Seed / validation | Validation | Generation |
+| Spacing | Seed / validation | Validation | Generation |
+| Radii/Shadows | Seed / validation | Validation | Generation |
+| Breakpoints | Seed / validation | Validation | Generation |
 
-Even in pure Figma flow, tokens in code serve as guardrails: if the generated code deviates from the design system, the tokens catch it.
+In Claude Design flow, the first handoff bundle can seed `docs/specs/design-system/` if it's empty. After that, the spec file is source of truth and PROMPT.md is validated against it.
+
+In pure Figma flow, tokens in code serve as guardrails: if the generated code deviates from the design system, the tokens catch it.
 
 ---
 

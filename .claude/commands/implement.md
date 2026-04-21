@@ -7,9 +7,12 @@ Workflow:
 2. Enter Plan Mode — create a detailed plan before coding
 3. Check related ADRs in docs/architecture/
 4. Check applicable specs in docs/specs/
-5. **Detect design flow:**
-   - If the PRD contains a Figma link → use Figma MCP to extract design context, then implement
-   - If no Figma link → activate the `frontend-agent` skill:
+5. **Detect design flow** (in priority order):
+   - If `docs/design/<prd-slug>-PROMPT.md` exists OR PRD references a Claude Design handoff →
+     activate `claude-design-handoff` skill: parse PROMPT.md, reconcile against CLAUDE.md + PRD,
+     produce reconciliation report, resolve conflicts with user, then hand off to `frontend-agent`
+   - Else if the PRD contains a Figma link → use Figma MCP to extract design context, then implement
+   - Else → activate the `frontend-agent` skill:
      a. Load design tokens from docs/specs/design-system/README.md
      b. Scan existing UI components for consistency
      c. Generate UI from PRD requirements + tokens + component library

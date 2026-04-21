@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bootstrap script for Claude Code Project Template
-# Usage: ./scripts/bootstrap.sh --level [1|2|3|4] [--design figma|agent|hybrid]
+# Usage: ./scripts/bootstrap.sh --level [1|2|3|4] [--design claude-design|figma|agent|hybrid|none]
 
 set -e
 
@@ -13,7 +13,7 @@ while [[ $# -gt 0 ]]; do
     --level) LEVEL="$2"; shift 2 ;;
     --design) DESIGN_FLOW="$2"; shift 2 ;;
     --review) REVIEW_LEVEL="$2"; shift 2 ;;
-    *) echo "Usage: ./scripts/bootstrap.sh --level [1|2|3|4] [--design figma|agent|hybrid] [--review simple|hybrid|deep]"; exit 1 ;;
+    *) echo "Usage: ./scripts/bootstrap.sh --level [1|2|3|4] [--design claude-design|figma|agent|hybrid|none] [--review simple|hybrid|deep]"; exit 1 ;;
   esac
 done
 
@@ -45,17 +45,19 @@ if [ -z "$DESIGN_FLOW" ]; then
   echo "🎨 Design flow — how will UI be built?"
   echo "   See docs/design-flow-guide.md for detailed guidance."
   echo ""
-  echo "   1) Figma    — PRD + Figma link → code (team has a designer)"
-  echo "   2) Agent    — PRD + design tokens → frontend agent generates UI (no designer)"
-  echo "   3) Hybrid   — Figma for complex screens, agent for the rest"
-  echo "   4) None     — no UI in this project (backend/CLI/agent only)"
+  echo "   1) Claude Design — Claude Design generates design → PROMPT.md handoff → code"
+  echo "   2) Figma         — PRD + Figma link → code (designer uses Figma)"
+  echo "   3) Agent         — PRD + design tokens → frontend agent (no external design source)"
+  echo "   4) Hybrid        — mix per PRD, auto-detected by /implement"
+  echo "   5) None          — no UI in this project (backend/CLI/agent only)"
   echo ""
-  read -p "   Choose [1-4] (default: 2): " design_choice
+  read -p "   Choose [1-5] (default: 3): " design_choice
 
   case "$design_choice" in
-    1) DESIGN_FLOW="figma" ;;
-    3) DESIGN_FLOW="hybrid" ;;
-    4) DESIGN_FLOW="none" ;;
+    1) DESIGN_FLOW="claude-design" ;;
+    2) DESIGN_FLOW="figma" ;;
+    4) DESIGN_FLOW="hybrid" ;;
+    5) DESIGN_FLOW="none" ;;
     *) DESIGN_FLOW="agent" ;;
   esac
 fi
@@ -67,6 +69,20 @@ configure_design_flow() {
   local flow="$1"
 
   case "$flow" in
+    claude-design)
+      echo "   ✨ Design flow: Claude Design"
+      echo "   ✅ claude-design-handoff skill enabled"
+      echo "   ✅ design-system/ spec module enabled"
+      echo "   ✅ docs/design/ directory created for PROMPT.md bundles"
+      mkdir -p docs/specs/design-system docs/design .claude/skills/claude-design-handoff
+      if grep -q "\[SPEC\] Choose your design flow" CLAUDE.md 2>/dev/null; then
+        sed -i.bak 's/\[SPEC\] Choose your design flow:/Design flow: **Claude Design** (configured by bootstrap)/' CLAUDE.md && rm -f CLAUDE.md.bak
+      fi
+      echo "   📝 TODO: Onboard your organization to Claude Design (claude.ai/design)"
+      echo "   📝 TODO: Save handoff bundles at docs/design/<prd-slug>-PROMPT.md"
+      echo "   📝 TODO: Review docs/specs/security/README.md — codebase is sent to Claude Design"
+      echo "   📝 TODO: Review .claude/skills/claude-design-handoff/SKILL.md"
+      ;;
     figma)
       echo "   🎨 Design flow: Figma"
       echo "   ✅ Figma MCP reference enabled"
@@ -74,36 +90,39 @@ configure_design_flow() {
       mkdir -p docs/specs/design-system
       # Update CLAUDE.md Design section — mark Figma as active
       if grep -q "\[SPEC\] Choose your design flow" CLAUDE.md 2>/dev/null; then
-        sed -i.bak 's/\[SPEC\] Choose your design flow (Figma is optional):/Design flow: **Figma** (configured by bootstrap)/' CLAUDE.md && rm -f CLAUDE.md.bak
+        sed -i.bak 's/\[SPEC\] Choose your design flow:/Design flow: **Figma** (configured by bootstrap)/' CLAUDE.md && rm -f CLAUDE.md.bak
       fi
       echo "   📝 TODO: Add Figma file link in docs/specs/design-system/README.md"
       echo "   📝 TODO: Configure Figma MCP server in .claude/settings.json"
       echo "   📝 TODO: Fill in design tokens in docs/specs/design-system/README.md"
       ;;
     agent)
-      echo "   🤖 Design flow: Agent (no Figma required)"
+      echo "   🤖 Design flow: Agent (no external design source)"
       echo "   ✅ frontend-agent skill enabled"
       echo "   ✅ design-system/ spec module enabled"
       mkdir -p docs/specs/design-system .claude/skills/frontend-agent
       if grep -q "\[SPEC\] Choose your design flow" CLAUDE.md 2>/dev/null; then
-        sed -i.bak 's/\[SPEC\] Choose your design flow (Figma is optional):/Design flow: **Agent** (configured by bootstrap)/' CLAUDE.md && rm -f CLAUDE.md.bak
+        sed -i.bak 's/\[SPEC\] Choose your design flow:/Design flow: **Agent** (configured by bootstrap)/' CLAUDE.md && rm -f CLAUDE.md.bak
       fi
       echo "   📝 TODO: Define design tokens in docs/specs/design-system/README.md"
       echo "   📝 TODO: Choose a component library (shadcn, Radix, MUI, etc.)"
       echo "   📝 TODO: Review .claude/skills/frontend-agent/SKILL.md"
       ;;
     hybrid)
-      echo "   🎨🤖 Design flow: Hybrid (Figma + Agent)"
+      echo "   ✨🎨🤖 Design flow: Hybrid (Claude Design + Figma + Agent)"
+      echo "   ✅ claude-design-handoff skill enabled"
       echo "   ✅ Figma MCP reference enabled"
       echo "   ✅ frontend-agent skill enabled"
       echo "   ✅ design-system/ spec module enabled"
-      mkdir -p docs/specs/design-system .claude/skills/frontend-agent
+      echo "   ✅ docs/design/ directory created for PROMPT.md bundles"
+      mkdir -p docs/specs/design-system docs/design .claude/skills/claude-design-handoff .claude/skills/frontend-agent
       if grep -q "\[SPEC\] Choose your design flow" CLAUDE.md 2>/dev/null; then
-        sed -i.bak 's/\[SPEC\] Choose your design flow (Figma is optional):/Design flow: **Hybrid** (configured by bootstrap)/' CLAUDE.md && rm -f CLAUDE.md.bak
+        sed -i.bak 's/\[SPEC\] Choose your design flow:/Design flow: **Hybrid** (configured by bootstrap)/' CLAUDE.md && rm -f CLAUDE.md.bak
       fi
       echo "   📝 TODO: Define design tokens in docs/specs/design-system/README.md"
-      echo "   📝 TODO: Configure Figma MCP server in .claude/settings.json"
-      echo "   📝 TODO: Document which screens go through Figma vs Agent in PRDs"
+      echo "   📝 TODO: Configure Figma MCP server in .claude/settings.json (if using Figma)"
+      echo "   📝 TODO: Onboard Claude Design (if using Flow A)"
+      echo "   📝 TODO: Document per-PRD which flow applies"
       ;;
     none)
       echo "   ⏭️  Design flow: None (no UI)"
