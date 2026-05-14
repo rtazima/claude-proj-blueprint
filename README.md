@@ -60,7 +60,7 @@ your-project/
 ├── .claude/
 │   ├── settings.json            ← L1+  Permissions & safety
 │   ├── output-styles/            ← L2+  Communication style presets (direct, verbose)
-│   ├── skills/                  ← L2+  Auto-invoked knowledge packs (18 skills)
+│   ├── skills/                  ← L2+  Auto-invoked knowledge packs (19 skills)
 │   │   ├── implement-prd/       ←      Implement from PRD
 │   │   ├── prd-writer/          ←      Draft/refine PRDs from rough ideas
 │   │   ├── debugger/            ←      Systematic debugging workflow
@@ -77,9 +77,10 @@ your-project/
 │   │   ├── adr/                 ←      Architecture Decision Records
 │   │   ├── intent-markers/       ←      :PERF:/:UNSAFE:/:SCHEMA: code annotations
 │   │   ├── incoherence-detector/ ←     Spec vs docs vs code mismatch finder
+│   │   ├── legacy-context/       ←     Bootstrap empty tiered lookup layers (run before context-engineering on legacy)
 │   │   ├── memory/              ← L4   Long-term memory retrieval
 │   │   └── _template-skill/     ←      Create your own
-│   ├── commands/                ← L2+  Slash commands (10 commands)
+│   ├── commands/                ← L2+  Slash commands (11 commands)
 │   │   ├── implement.md         ←      /implement <prd-path>
 │   │   ├── ralph.md             ←      /ralph <prd-path> (don't stop)
 │   │   ├── debug.md             ←      /debug <error|file>
@@ -89,6 +90,7 @@ your-project/
 │   │   ├── learn.md             ←      /learn [--commits N]
 │   │   ├── deploy.md            ←      /deploy
 │   │   ├── spec-review.md       ←      /spec-review <path>
+│   │   ├── discover.md          ←      /discover <path> (legacy archaeology)
 │   │   └── memory.md            ←      /memory <search|index|stats>
 │   ├── hooks.json               ← L3+  Automated gates (8 hooks)
 │   └── agents/                  ← L4+  Specialized sub-agents (4 agents)

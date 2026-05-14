@@ -126,6 +126,28 @@ Most implementation questions are answered at Layer 2 (docs). Only edge cases ne
 - Task que toca 10+ arquivos numa única sessão sem decomposição
 - Carregou spec modules que não são relevantes para a task atual
 
+## When upper layers are empty
+
+The 6 techniques above assume tiered lookup (technique #6) has something
+useful to query in layers 1 (semantic memory) and 2 (structured docs). In
+legacy or consolidated codebases with no ADRs, no post-mortems indexed,
+and outdated or absent docs, those layers are empty. Tiered lookup
+collapses to layer 3 (raw code reading) every session, and the cost
+savings the technique promises disappear.
+
+Before applying these 6 techniques on a legacy module, run the
+`legacy-context` skill (or `/discover <path>`) to bootstrap the upper
+layers from the code itself. The skill writes discovery notes, ADR
+candidates, and intent marker suggestions into the paths that tiered
+lookup queries. After bootstrap, the techniques here work as designed.
+
+Signals that you need bootstrap first:
+- `memory/query.py "<module name>"` returns no results above the similarity threshold
+- `docs/architecture/` has no ADRs covering the module
+- The module is older than 12 months and `git log --oneline` shows authors who left the team
+
+See `.claude/skills/legacy-context/SKILL.md` for the bootstrap workflow.
+
 ## References
 - Reactive complement: `scripts/context-guard.sh` (PostToolUse hook)
 - Context save: `scripts/pre-compact-save.sh` (PreCompact hook)

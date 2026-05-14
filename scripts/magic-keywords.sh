@@ -55,6 +55,12 @@ if echo "$PROMPT_LOWER" | grep -qE "(refactor|extract (function|method|class|mod
   exit 0
 fi
 
+# Legacy context discovery
+if echo "$PROMPT_LOWER" | grep -qE "(legacy code|c[oó]digo legado|sistema legado|sistema antigo|discover module|entender m[oó]dulo|arqueologia|c[oó]digo sem documenta[cç][aã]o|c[oó]digo que ningu[eé]m entende)"; then
+  echo '{"result":"add_context","context":"[LEGACY CONTEXT] Use the legacy-context skill. Read-only for source code. Three phases: survey (map hot/cold files via git log), discovery (extract purpose/decisions/dependencies/risks from priority files), promote (draft ADR candidates and index discovery notes in semantic memory). Outputs to memory/discoveries/ and docs/architecture/_candidates/. Run this before context-engineering techniques on legacy modules where memory and docs are empty."}'
+  exit 0
+fi
+
 # Tech debt
 if echo "$PROMPT_LOWER" | grep -qE "(tech.?debt|technical debt|cleanup backlog|what needs fix|code health|debt audit|divida tecnica)"; then
   echo '{"result":"add_context","context":"[TECH DEBT SCAN] Use the tech-debt skill. Scan for TODOs, type suppressions, high-churn files, outdated deps, test gaps. Produce prioritized report in docs/architecture/."}'

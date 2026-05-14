@@ -49,6 +49,7 @@ See `docs/product/vision.md` for the full product vision.
 - `/deploy` → run deploy checklist
 - `/memory <search|index|stats>` → long-term memory operations
 - `/spec-review <path>` → run agent audit (security + compliance + quality + performance)
+- `/discover <path>` → legacy code archaeology: populate empty tiered lookup layers before /implement or /refactor
 
 ### Magic keywords (L3+)
 These phrases are auto-detected and activate the corresponding workflow:
@@ -63,6 +64,7 @@ These phrases are auto-detected and activate the corresponding workflow:
 - "build me feature" / "implement feature" → /implement flow
 - "security audit" / "compliance audit" → /spec-review flow
 - "learn from this" / "retrospective" → learner skill
+- "legacy code" / "código legado" / "discover module" / "arqueologia" → legacy-context skill (run before context-engineering on old modules)
 
 ## Workflow Rules
 [SPEC] Workflow rules. Example:

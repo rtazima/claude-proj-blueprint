@@ -7,7 +7,36 @@ This project uses date-based releases (YYYY-MM-DD), not semver.
 
 ---
 
-## [2026-04-21] — Claude Design integration
+## [2026-05-14] — Legacy context discovery
+
+Adds dedicated tooling for context bootstrap on consolidated codebases where
+tiered lookup layers 1 (semantic memory) and 2 (structured docs) are empty.
+The 6 techniques in `context-engineering` assume those layers contain useful
+information. In legacy code with no ADRs, no post-mortems indexed, and
+outdated or absent docs, tiered lookup collapses to layer 3 (raw code) and
+the cost savings disappear. This release runs *before* `context-engineering`
+becomes effective, populating the upper layers from the code itself.
+
+### Added
+- **`legacy-context` skill** (`.claude/skills/legacy-context/SKILL.md`) — three-phase archaeology workflow that maps a legacy module, extracts implicit decisions from priority files, and writes discovery notes, ADR candidates, and intent marker suggestions into the empty upper layers. Read-only for source code (`allowed tools: Read, Grep, Glob, Bash, Write`, no Edit). Phase 1 survey uses `git log` to find hot files (most commits in last 12 months) and cold files (untouched 6+ months). Phase 2 discovery captures purpose, apparent decisions, critical dependencies, and risks per priority file, suggests intent markers from the `intent-markers` vocabulary as a patch. Phase 3 promote detects patterns appearing 3+ times, drafts ADR candidates in `docs/architecture/_candidates/`, runs `memory/index.py --incremental`.
+- **`/discover <path>` slash command** (`.claude/commands/discover.md`) — activates the `legacy-context` skill scoped to a module, directory, or file. Use before `/implement` or `/refactor` on legacy modules.
+- **Magic keyword detection** in `scripts/magic-keywords.sh` — phrases "legacy code", "código legado", "sistema antigo", "discover module", "arqueologia", "código sem documentação" auto-activate the skill.
+- **Output paths** for discovery artifacts: `memory/discoveries/<module-slug>-survey.md` (territory map), `memory/discoveries/<module-slug>/<file-slug>.md` (per-file notes), `memory/discoveries/<module-slug>/markers.patch` (intent marker suggestions for human review), `docs/architecture/_candidates/adr-XXX-<topic>.md` (ADR drafts).
+
+### Changed
+- `.claude/skills/context-engineering/SKILL.md` — added "When upper layers are empty" section between Red Flags and References. Names the assumption the 6 techniques make about tiered lookup, lists three signals that bootstrap is needed (memory query returns nothing, no ADRs cover the module, original authors left), points to `legacy-context` skill.
+- `CLAUDE.md` — `/discover` added to slash commands list. Magic keywords list extended with legacy-context triggers.
+- `README.md` — `legacy-context/` added to skills tree (after `incoherence-detector/`), `discover.md` added to commands tree, counts updated to 19 skills and 11 commands.
+
+### Rationale
+Most public Claude Code blueprints today address greenfield or modern codebases. The techniques work because layers 1 and 2 of tiered lookup are either populated as the project grows, or skipped without much loss. In consolidated companies with codebases older than 5 years, no ADRs, partial docs, and original authors gone, those layers are empty from day one. Context engineering as documented in the existing skill cannot operate. This release names that gap and provides the bootstrap step that makes the rest of the framework usable in that environment.
+
+### Not yet done
+- Stack-specific discovery heuristics (e.g., ASP.NET controllers, EF Core repository pattern, Spring services). The current skill is stack-agnostic.
+- Diff comparison: measure context savings before/after running `/discover` on a module. Planned as separate skill.
+- Promotion of discovery notes to global cross-project memory. Currently project-scoped only.
+
+---
 
 Anthropic launched Claude Design (research preview, Pro/Max/Team/Enterprise).
 Its "Send to Claude Code" button produces a `PROMPT.md` bundle — a native
