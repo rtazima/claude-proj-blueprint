@@ -1,6 +1,6 @@
 ---
 name: legacy-context
-description: "Legacy code archaeology and context bootstrap. Activated when the user mentions \"legacy code\", \"código legado\", \"sistema antigo\", \"código sem documentação\", \"discover module\", \"entender módulo\", \"arqueologia de código\", \"código que ninguém entende\", or runs /discover. Populates the empty upper layers of tiered lookup (memory and docs) before context-engineering techniques can be effective. Read-only for source code: outputs discovery notes, ADR candidates, and suggested intent markers. Optional remote discovery via GitHub CLI captures PR and issue history."
+description: "Legacy code archaeology and context bootstrap. Activated when the user mentions \"legacy code\", \"código legado\", \"sistema antigo\", \"código sem documentação\", \"discover module\", \"entender módulo\", \"arqueologia de código\", \"código que ninguém entende\", or runs /discover. Populates the empty upper layers of tiered lookup (memory and docs) before context-engineering techniques can be effective. Read-only for source code: outputs discovery notes, ADR candidates, and suggested intent markers. Remote discovery supports GitHub (via gh CLI) and Azure DevOps (via az CLI plus REST)."
 allowed tools: Read, Grep, Glob, Bash, Write
 ---
 
@@ -29,6 +29,14 @@ in a 6-year-old PR review or the issue closed as "wontfix" with three
 paragraphs of reasoning. Missing those is a worse failure than producing
 verbose discovery notes.
 
+## Supported remote providers
+
+| Provider | Detection | Auth | Notes |
+|---|---|---|---|
+| GitHub | URL contains `github.com` | `gh auth status` | Full feature parity |
+| Azure DevOps | URL contains `dev.azure.com` or `.visualstudio.com` | `AZURE_DEVOPS_EXT_PAT` env var | No reactions on comments; releases mapped to git tags |
+| Other (GitLab, Bitbucket, self-hosted) | Anything else | n/a | Phase 3 skipped with warning |
+
 ## Rules
 
 1. **Read source, write context.** Never modify source files. All output
@@ -46,41 +54,84 @@ verbose discovery notes.
    source file exceeds 2,000 lines, treat it as a sub-module and recurse.
    On remote, do not cap by top-N. Stratify by discussion density instead.
 6. **Outputs go to predictable paths.** Other skills (memory, incoherence
-   detector, ADR) consume the discovery output. Keep file naming consistent.
+   detector, ADR) consume the discovery output. Keep file naming consistent
+   across providers.
+7. **Same output across providers.** Phase 3 produces identical file
+   structure whether running on GitHub or Azure DevOps. Downstream phases
+   should not need to know which provider generated the data.
 
 ## Workflow
 
 ### Phase 1: Pre-flight checks
 
-Establish whether remote discovery is possible and estimate volume before
-committing to a long run.
+Detect the remote provider, validate authentication, and estimate volume
+before committing to a long run.
 
-1. Check GitHub CLI availability:
+1. Detect provider:
    ```bash
-   gh auth status 2>&1
+   git remote get-url origin
    ```
-   If this fails or reports "not logged in", set internal flag
-   `gh_available=false`. Phase 3 will skip with a visible warning, but
-   the rest of the workflow proceeds.
+   Match the URL:
+   - Contains `github.com` → provider=github
+   - Contains `dev.azure.com` or `.visualstudio.com` → provider=azure_devops
+   - Anything else → provider=unknown
 
-2. Confirm the repo is on GitHub:
+2. Parse repo identifiers:
+
+   GitHub URLs (`git@github.com:OWNER/REPO.git` or `https://github.com/OWNER/REPO`):
    ```bash
-   gh repo view --json owner,name,nameWithOwner 2>&1
+   gh repo view --json owner,name,nameWithOwner
    ```
-   If this fails (repo on GitLab, Bitbucket, or local-only), set
-   `gh_available=false`.
 
-3. Estimate volume:
+   Azure DevOps URLs:
+   - HTTPS form: `https://ORG@dev.azure.com/ORG/PROJECT/_git/REPO`
+   - SSH form: `git@ssh.dev.azure.com:v3/ORG/PROJECT/REPO`
+
+   Extract ORG, PROJECT, REPO. URL-decode the PROJECT name (Azure allows
+   spaces in project names, encoded as `%20`).
+
+3. Validate authentication:
+
+   For provider=github:
    ```bash
-   gh pr list --state all --limit 1 --json number --jq 'length'
-   gh search prs --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner)" --limit 1 --json totalCount --jq '.[].totalCount' 2>/dev/null
+   gh auth status
    ```
-   If total PR count exceeds 5,000, print a warning that Phase 3 will be
-   slow but proceed (the user explicitly opted into full coverage). If
-   total exceeds 20,000, ask for confirmation before continuing.
 
-4. Print a one-line pre-flight summary: `gh_available`, repo identifier,
-   estimated PR count, estimated issue count.
+   For provider=azure_devops:
+   ```bash
+   # PAT must be exported in the shell that launched Claude Code
+   test -n "$AZURE_DEVOPS_EXT_PAT" || { echo "AZURE_DEVOPS_EXT_PAT not set"; }
+   az account show 2>&1 | head -3
+   az repos list --output table | head -3
+   ```
+
+   If any check fails for the detected provider, OR provider=unknown:
+   - Set internal flag `remote_discovery=false`
+   - Phase 3 will skip with visible warning
+   - Phases 2, 4, 5 still run
+
+4. Estimate volume:
+
+   For github:
+   ```bash
+   gh search prs --repo "$NAMEWITHOWNER" --limit 1 --json totalCount --jq '.[].totalCount'
+   ```
+
+   For azure_devops:
+   ```bash
+   # No direct totalCount; sample to estimate
+   az repos pr list --repository "$REPO" --status all --top 1000 --output json | jq 'length'
+   ```
+   If the sample returns exactly 1000, total may be much higher. Adjust
+   pagination strategy in Phase 3b accordingly.
+
+5. If estimated PR count exceeds 5000, print warning that Phase 3 will be
+   slow but proceed. If exceeds 20000, ask for confirmation before
+   continuing.
+
+6. Print a one-line pre-flight summary: `provider`, repo identifier
+   (`owner/repo` or `org/project/repo`), estimated PR count, estimated
+   issue/work-item count, `remote_discovery` flag.
 
 ### Phase 2: Survey
 
@@ -139,14 +190,18 @@ map, not the territory.
 
 ### Phase 3: Remote Discovery
 
-Skip this phase entirely if Phase 1 set `gh_available=false`. Print
+Skip this phase entirely if Phase 1 set `remote_discovery=false`. Print
 warning and proceed to Phase 4.
 
 This phase iterates every file in the path that has any commit history,
-not just the priority ones from the survey. The goal is full coverage of
-PR and issue context attached to the path.
+not just the priority ones from the survey.
 
-1. Build a PR inventory once, used by all per-file lookups:
+Branch by provider. Both branches produce the same output structure
+(per-file remote contexts plus three module aggregates).
+
+#### Phase 3a: GitHub provider
+
+1. Build PR inventory once, used by all per-file lookups:
    ```bash
    gh pr list --state all --limit 1000 \
      --json number,title,body,state,createdAt,mergedAt,closedAt,\
@@ -188,61 +243,171 @@ PR and issue context attached to the path.
 
 5. Write to `memory/discoveries/<module-slug>/<file-slug>-remote.md`,
    one file per source file that has any PR history. Skip Cosmetic PRs
-   entirely. Three sections, in this order:
+   entirely. See "Per-file remote context format" section below.
 
-   ```markdown
-   # Remote context: <file>
-
-   ## Key PRs (high discussion density)
-
-   ### PR #<num>: <title>
-   - Author: @username | Merged: 2024-03-15 | State: merged
-   - Files touched: <files>
-   - Body: <full body, no truncation>
-   - Top review comments:
-     - @reviewer1 (👍 3): "We discussed making this temporary, see #210"
-     - @reviewer2: "Performance concern: this allocates on every call"
-   - Inline comments on critical lines:
-     - Line 142: @reviewer1: "<comment>"
-
-   ### PR #<num>: <title>
-   ...
-
-   ## Moderate PRs
-
-   ### PR #<num>: <title>
-   - Author: @username | Merged: 2023-06-12 | State: merged
-   - Files touched: <files>
-   - Body: <full body>
-   - Review comments:
-     - @reviewer: "<comment>"
-
-   ## Quiet PRs (low discussion, full inventory)
-
-   - PR #<num> | 2020-04-22 | @author | <title>
-   - PR #<num> | 2019-11-03 | @author | <title>
-   - PR #<num> | 2018-08-15 | @author | <title>
-   ```
-
-6. Generate three aggregate files for the module:
-
-   `memory/discoveries/<module-slug>-issues.md` — every issue (open or
-   closed) that mentions any file path in the module, any keyword in the
-   module name, or is linked from any PR captured above. Same three-tier
-   classification by comment count.
-
-   `memory/discoveries/<module-slug>-releases.md` — every release where
-   any line of the release notes mentions a file path or module
-   identifier. Capture release version, date, full relevant excerpt.
-
-   `memory/discoveries/<module-slug>-remote-summary.md` — meta overview:
-   total PRs captured, total Key/Moderate/Quiet counts, top authors,
-   most-referenced issues, period covered, gaps detected (files in the
-   path with zero PR history is a strong tell of either dead code or
-   pre-Git-era code).
+6. Generate three aggregate files for the module (see "Module aggregate
+   files format" section below).
 
 7. If rate limit is approached, pause and warn. The user can resume by
    re-running the phase, which will skip already-cached PRs.
+
+#### Phase 3b: Azure DevOps provider
+
+Mirror of Phase 3a using Azure DevOps APIs. Produces identical output
+structure with provider-specific data sourcing. Assumes
+`AZURE_DEVOPS_EXT_PAT` is exported in the calling shell.
+
+1. Build PR inventory once:
+   ```bash
+   # ORG, PROJECT, REPO from Phase 1
+   az repos pr list --repository "$REPO" --status all --top 1000 \
+     --output json > /tmp/pr-inventory.json
+   ```
+   If `jq 'length' /tmp/pr-inventory.json` returns exactly 1000, paginate
+   using `--skip` until empty results:
+   ```bash
+   skip=1000
+   while true; do
+     batch=$(az repos pr list --repository "$REPO" --status all \
+       --top 1000 --skip $skip --output json)
+     count=$(echo "$batch" | jq 'length')
+     [ "$count" -eq 0 ] && break
+     echo "$batch" | jq '.[]' >> /tmp/pr-inventory.json
+     skip=$((skip + 1000))
+   done
+   ```
+
+2. For each file under the path:
+   - Get SHAs that touched the file: `git log --format="%H" -- <file>`
+   - For each SHA, resolve to PR id(s) via the REST API:
+     ```bash
+     curl -s -u ":$AZURE_DEVOPS_EXT_PAT" \
+       "https://dev.azure.com/$ORG/$PROJECT_ENCODED/_apis/git/repositories/$REPO/commits/$SHA/pullRequests?api-version=7.0" \
+       | jq '.value[].pullRequestId'
+     ```
+     `$PROJECT_ENCODED` is the URL-encoded project name from Phase 1.
+   - Collect unique PR ids for the file.
+
+3. For each unique PR, fetch:
+   - Basic info and metadata:
+     ```bash
+     az repos pr show --id "$PR_ID" --output json
+     ```
+   - Threads (which contain both general comments and inline review
+     comments in Azure DevOps):
+     ```bash
+     curl -s -u ":$AZURE_DEVOPS_EXT_PAT" \
+       "https://dev.azure.com/$ORG/$PROJECT_ENCODED/_apis/git/repositories/$REPO/pullRequests/$PR_ID/threads?api-version=7.0"
+     ```
+     Each thread has `comments[]` and optional `threadContext` indicating
+     file path and line numbers. Inline review comments have
+     `threadContext` set; general PR comments do not.
+   - Linked work items:
+     ```bash
+     az repos pr show-work-items --id "$PR_ID" --output json
+     ```
+
+4. Classify each PR by density. Same rules as Phase 3a, with two
+   provider-specific adaptations:
+   - **Cosmetic** and **Moderate** and **Quiet**: same thresholds as 3a,
+     counting all comments across all threads (excluding system-generated
+     threads where `properties.CodeReviewThreadType` indicates auto-events
+     like "auto complete enabled").
+   - **Key**: 5+ thread comments OR linked to a work item whose
+     description has 200+ characters OR has the word "decision",
+     "architecture", "breaking" anywhere in PR body or comments.
+   - Azure DevOps has no reactions feature. The reaction-based criterion
+     from Phase 3a is dropped here.
+
+5. Write to `memory/discoveries/<module-slug>/<file-slug>-remote.md`
+   using the same format as Phase 3a. Author display uses Azure DevOps
+   `displayName` from the API (which is typically the person's name, not
+   a handle).
+
+6. Generate the three aggregate files. See "Module aggregate files format"
+   below. Azure-specific notes:
+   - Issues file uses work items. Query via WIQL:
+     ```bash
+     az boards work-item query --wiql \
+       "SELECT [System.Id], [System.Title], [System.State], [System.Tags] FROM workitems WHERE [System.Title] CONTAINS '<module-keyword>' OR [System.Tags] CONTAINS '<module-keyword>' ORDER BY [System.ChangedDate] DESC" \
+       --output json
+     ```
+     For each returned work item, fetch detail with
+     `az boards work-item show --id "$WI_ID" --output json`. Capture
+     description, comments, links, and state transitions.
+   - Releases file falls back to git tags (Azure DevOps Releases is a
+     Pipelines concept, not used for release notes in most repos):
+     ```bash
+     git tag --sort=-creatordate
+     ```
+     For each tag, list commits in the path between the tag and its
+     predecessor, and include any matching work item titles. Flag this
+     limitation explicitly in the file header.
+
+7. Rate limit handling: Azure DevOps allows ~200 req/sec/user under
+   typical PAT scopes. If a 429 is returned, pause for 60 seconds and
+   retry. If 429 repeats more than 3 times, abort the phase and write
+   what was captured so far.
+
+#### Per-file remote context format
+
+Both Phase 3a and Phase 3b write the same structure per source file:
+
+```markdown
+# Remote context: <file>
+
+Provider: github | azure_devops
+Generated: <date>
+
+## Key PRs (high discussion density)
+
+### PR #<num>: <title>
+- Author: @username | Merged: 2024-03-15 | State: merged
+- Files touched: <files>
+- Linked items: #<issue-or-wi-id> (if any)
+- Body: <full body, no truncation>
+- Top review comments:
+  - @reviewer1: "<comment text>"
+  - @reviewer2: "<comment text>"
+- Inline comments on critical lines:
+  - Line 142: @reviewer1: "<comment>"
+
+### PR #<num>: ...
+...
+
+## Moderate PRs
+
+### PR #<num>: <title>
+- Author: @username | Merged: 2023-06-12 | State: merged
+- Files touched: <files>
+- Body: <full body>
+- Review comments:
+  - @reviewer: "<comment>"
+
+## Quiet PRs (low discussion, full inventory)
+
+- PR #<num> | 2020-04-22 | @author | <title>
+- PR #<num> | 2019-11-03 | @author | <title>
+```
+
+#### Module aggregate files format
+
+`memory/discoveries/<module-slug>-issues.md` — every issue (GitHub) or
+work item (Azure DevOps) that mentions any file path in the module, any
+keyword in the module name, or is linked from any PR captured above.
+Same three-tier classification by comment count. Note in the file header
+which provider produced it.
+
+`memory/discoveries/<module-slug>-releases.md` — every release where
+release notes mention a file path or module identifier. For GitHub, uses
+`gh release list` and `gh release view`. For Azure DevOps, uses git tags
+as a fallback and notes the limitation explicitly.
+
+`memory/discoveries/<module-slug>-remote-summary.md` — meta overview:
+provider used, total PRs captured, total Key/Moderate/Quiet counts, top
+authors, most-referenced issues or work items, period covered, gaps
+detected (files in the path with zero PR history is a strong tell of
+either dead code or pre-Git-era code).
 
 ### Phase 4: Local Discovery
 
@@ -255,8 +420,7 @@ in depth and cross-references with remote findings from Phase 3.
    to identify implicit owners (recurring authors). Flag authors who are
    no longer in `git shortlog -sn --since="6 months ago"` — that
    contextual knowledge has left the building.
-3. Read the last 20 commit messages that touched the file (extended from
-   10 because the 10-year history rewards looking further back):
+3. Read the last 20 commit messages that touched the file:
    ```bash
    git log -20 --pretty=format:"%h %ad %an %s" --date=short -- <file>
    ```
@@ -274,16 +438,15 @@ in depth and cross-references with remote findings from Phase 3.
      code, partial migrations, half-applied patterns
    - **Remote context** — summary of Key PRs from `<file-slug>-remote.md`
      with explicit cross-references (e.g., "PR #234 in 2022 made this
-     temporary, see issue #210 for full reasoning"). Pull verbatim
+     temporary, see work item #1045 for full reasoning"). Pull verbatim
      quotes from review comments when they capture decision rationale
      that the code does not.
 6. Suggest intent markers as a patch file at
-   `memory/discoveries/<module-slug>/markers.patch`. Use the markers from
+   `memory/discoveries/<module-slug>/markers.patch`. Use markers from
    the `intent-markers` skill: `:PERF:`, `:UNSAFE:`, `:SCHEMA:`,
-   `:SECURITY:`, `:HACK:`, `:FLAKY:`. Each suggestion must have a one-line
-   justification in a comment above the marker line, with a reference to
-   the PR or issue that revealed the marker (e.g.,
-   `// :HACK: temporary per PR #234`).
+   `:SECURITY:`, `:HACK:`, `:FLAKY:`. Each suggestion includes a one-line
+   justification referencing the PR or issue/work-item that revealed it
+   (e.g., `// :HACK: temporary per PR #234`).
 
 Anti-pattern: do not read files linearly trying to understand every line.
 Use `git blame`, naming patterns, and remote PR context to find anchor
@@ -310,10 +473,11 @@ Move discovery output into the layers that tiered lookup queries.
    continue. The text files in `memory/discoveries/` are still useful
    without semantic indexing.
 4. Print a final summary to the user:
+   - Provider used (github | azure_devops | skipped)
    - Files explored in depth
    - PRs captured (Key / Moderate / Quiet counts)
-   - Issues captured
-   - Releases referenced
+   - Issues or work items captured
+   - Releases or tags referenced
    - Implicit decisions detected
    - ADR candidates proposed (with paths)
    - Intent marker patch path
@@ -329,8 +493,8 @@ applies what makes sense, and discards the rest.
 | Survey | `memory/discoveries/<module-slug>-survey.md` |
 | Per-file remote context | `memory/discoveries/<module-slug>/<file-slug>-remote.md` |
 | Per-file discovery notes | `memory/discoveries/<module-slug>/<file-slug>.md` |
-| Module issues | `memory/discoveries/<module-slug>-issues.md` |
-| Module releases | `memory/discoveries/<module-slug>-releases.md` |
+| Module issues / work items | `memory/discoveries/<module-slug>-issues.md` |
+| Module releases / tags | `memory/discoveries/<module-slug>-releases.md` |
 | Remote discovery summary | `memory/discoveries/<module-slug>-remote-summary.md` |
 | Intent marker patch | `memory/discoveries/<module-slug>/markers.patch` |
 | ADR candidates | `docs/architecture/_candidates/adr-XXX-<topic>.md` |
@@ -347,6 +511,8 @@ applies what makes sense, and discards the rest.
 | "Remote discovery é overkill, git log já dá o contexto" | Em código de 5+ anos, metade do contexto mora nos PRs (review comments, decisões discutidas). git log mostra que mudou, não por quê. |
 | "Posso pular o Phase 1 e ir direto pro discovery" | Phase 1 evita rate limit na Phase 3 e te avisa de volume excessivo antes da skill consumir tempo. |
 | "Vou capturar só os top 10 PRs pra economizar" | Em legacy, a discussão crítica frequentemente está num PR antigo aparentemente trivial. Estratifica por densidade, não por contagem. |
+| "GitHub e Azure DevOps são iguais, posso reusar a Phase 3a" | API e modelo de dados diferem. Threads em Azure ≠ inline comments em GitHub. Work items ≠ issues. A Phase 3b traduz isso pro mesmo output. |
+| "PAT do Azure funciona se eu colocar no .zshrc" | Funciona, mas vaza o token em arquivo de config. Exporta na sessão e fecha. Trabalho de cliente, segurança importa. |
 
 ## Red Flags
 
@@ -357,8 +523,10 @@ applies what makes sense, and discards the rest.
 - Tentativa de editar arquivos em `src/` (skill não tem Edit, deve falhar limpo)
 - Survey omitido e pulou direto pra discovery (perde os ganchos de hot/cold)
 - Phase 3 rodando sem Phase 1 (pode estourar rate limit sem aviso)
-- PR classificado como Key sem nenhum dos critérios objetivos atendidos (5+ comments, release-noted, 2+ reactions, palavras-chave)
+- PR classificado como Key sem nenhum dos critérios objetivos atendidos
 - Quiet PRs sem listagem (estrutura de output incompleta, pode estar perdendo inventário)
+- Phase 3b sem `AZURE_DEVOPS_EXT_PAT` exportado (smoke test deve pegar antes, mas se passar é red flag)
+- Output em provider github e azure_devops com estruturas diferentes (regressão da abstração)
 
 ## When to hand off
 
@@ -379,3 +547,5 @@ applies what makes sense, and discards the rest.
 - Memory infrastructure: `memory/index.py`, `memory/query.py`
 - Hook: `scripts/context-guard.sh` (reactive context monitoring during work)
 - External: GitHub CLI (`gh`) docs at https://cli.github.com/manual/
+- External: Azure DevOps CLI (`az devops`) docs at https://learn.microsoft.com/en-us/azure/devops/cli/
+- External: Azure DevOps REST API at https://learn.microsoft.com/en-us/rest/api/azure/devops/
