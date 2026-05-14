@@ -34,7 +34,7 @@ verbose discovery notes.
 | Provider | Detection | Auth | Notes |
 |---|---|---|---|
 | GitHub | URL contains `github.com` | `gh auth status` | Full feature parity |
-| Azure DevOps | URL contains `dev.azure.com` or `.visualstudio.com` | `AZURE_DEVOPS_EXT_PAT` env var | No reactions on comments; releases mapped to git tags |
+| Azure DevOps | URL contains `dev.azure.com` or `.visualstudio.com` | `AZURE_DEVOPS_EXT_PAT` env var (no `az login` needed) | No reactions on comments; releases mapped to git tags |
 | Other (GitLab, Bitbucket, self-hosted) | Anything else | n/a | Phase 3 skipped with warning |
 
 ## Rules
@@ -99,10 +99,14 @@ before committing to a long run.
 
    For provider=azure_devops:
    ```bash
-   # PAT must be exported in the shell that launched Claude Code
+   # PAT must be exported in the shell that launched Claude Code.
+   # az login is NOT required for Azure DevOps with PAT auth. Many
+   # users have DevOps access without an Azure Cloud subscription;
+   # `az account show` will fail for them but DevOps API access works.
    test -n "$AZURE_DEVOPS_EXT_PAT" || { echo "AZURE_DEVOPS_EXT_PAT not set"; }
-   az account show 2>&1 | head -3
-   az repos list --output table | head -3
+   # Validate by listing one PR from the target repo. If this returns
+   # JSON (even an empty array), authentication is valid.
+   az repos pr list --repository "$REPO" --status all --top 1 --output json >/dev/null
    ```
 
    If any check fails for the detected provider, OR provider=unknown:
@@ -513,6 +517,7 @@ applies what makes sense, and discards the rest.
 | "Vou capturar só os top 10 PRs pra economizar" | Em legacy, a discussão crítica frequentemente está num PR antigo aparentemente trivial. Estratifica por densidade, não por contagem. |
 | "GitHub e Azure DevOps são iguais, posso reusar a Phase 3a" | API e modelo de dados diferem. Threads em Azure ≠ inline comments em GitHub. Work items ≠ issues. A Phase 3b traduz isso pro mesmo output. |
 | "PAT do Azure funciona se eu colocar no .zshrc" | Funciona, mas vaza o token em arquivo de config. Exporta na sessão e fecha. Trabalho de cliente, segurança importa. |
+| "Preciso de `az login` antes de rodar a skill em Azure DevOps" | Não. O PAT exportado em `AZURE_DEVOPS_EXT_PAT` basta. Muito usuário tem acesso ao DevOps sem subscription Azure Cloud, então `az login` nem completa. A skill valida acesso real via `az repos pr list`. |
 
 ## Red Flags
 

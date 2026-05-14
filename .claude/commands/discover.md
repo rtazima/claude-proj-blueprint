@@ -24,7 +24,7 @@ Output paths:
 
 Supported providers:
 - GitHub: detected by `github.com` in remote URL. Requires `gh auth login` completed.
-- Azure DevOps: detected by `dev.azure.com` or `.visualstudio.com` in remote URL. Requires `AZURE_DEVOPS_EXT_PAT` exported in the shell that launched Claude Code, plus `az login`. PAT needs Read scopes for Code, Pull Request Threads, and Work Items.
+- Azure DevOps: detected by `dev.azure.com` or `.visualstudio.com` in remote URL. Requires `AZURE_DEVOPS_EXT_PAT` exported in the shell that launched Claude Code. PAT needs Read scopes for Code, Pull Request Threads, and Work Items. `az login` is NOT required (PAT alone authenticates DevOps API access).
 - Other providers (GitLab, Bitbucket, self-hosted): Phase 3 is skipped with warning. Phases 2, 4, 5 still run.
 
 Use this before `/implement` or `/refactor` on modules where memory and docs are empty. Designed for codebases older than 5 years with no convention discipline.
