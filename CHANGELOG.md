@@ -36,6 +36,132 @@ Most public Claude Code blueprints today address greenfield or modern codebases.
 - Diff comparison: measure context savings before/after running `/discover` on a module. Planned as separate skill.
 - Promotion of discovery notes to global cross-project memory. Currently project-scoped only.
 
+### v1.1 — Remote discovery via GitHub CLI
+
+Adds **Phase 3: Remote Discovery** to the `legacy-context` skill. Phase numbering renumbered to 1–5 for explicit ordering (Pre-flight, Survey, Remote Discovery, Local Discovery, Promote). The original 3-phase v1 is fully subsumed.
+
+Motivation: in repositories older than 5 years, a substantial portion of design context lives in PR review comments and closed issues, not in `git log`. Reviewers write things like "this is temporary, see issue #234" and the actual reasoning lives in the issue thread. Pure local archaeology (v1) cannot reach that content. This release adds GitHub CLI (`gh`) integration to capture it.
+
+#### Added in v1.1
+- **Phase 1: Pre-flight** — validates `gh auth status`, confirms repo is on GitHub, estimates PR/issue volume. Sets internal flag controlling Phase 3.
+- **Phase 3: Remote Discovery** — iterates every file with PR history in the path (full coverage, no top-N cap). For each file, fetches every PR that touched it including title, body, review comments, inline comments, reactions. Classifies each PR by discussion density (Cosmetic, Key, Moderate, Quiet) and writes a per-file remote context document. Generates three aggregate files per module: `<module>-issues.md`, `<module>-releases.md`, `<module>-remote-summary.md`. Skipped gracefully if `gh` is unavailable or repo is not on GitHub.
+- **Cross-reference in Phase 4** (Local Discovery) — each discovery note now includes a "Remote context" section that summarizes Key PRs and pulls verbatim review comments capturing decision rationale.
+- **Pattern detection in Phase 5** (Promote) — ADR candidates now consult both local discovery notes and `<module>-remote-summary.md`. Patterns recurring across PR discussions are valid sources for candidates.
+- **Intent marker references** — markers suggested in the patch now include PR/issue references in their justification comments (e.g., `// :HACK: temporary per PR #234`).
+
+#### Changed in v1.1
+- Survey window extended for old codebases: hot files use both 24-month and all-time windows; cold threshold raised from 6 months to 3 years; commit message scan increased from 10 to 20 entries per file.
+- Workflow renumbered to 5 phases (was 3). Phase 1 of v1 → Phase 2 of v1.1; Phase 2 of v1 → Phase 4 of v1.1; Phase 3 of v1 → Phase 5 of v1.1.
+- Discovery note structure adds a fifth section: "Remote context".
+
+#### Stratification by density, not count
+Remote Discovery does not cap PRs at top-N. Instead, every PR that touched the file is captured and classified:
+
+| Tier | Criteria | Output |
+|---|---|---|
+| Cosmetic | Only docs/test files, OR diff < 20 lines with 0 review comments | Excluded entirely |
+| Key | 5+ review comments (summary + inline), OR mentioned in a release note, OR 2+ reactions on review comments, OR contains "decision/architecture/breaking" | Full body + top comments + inline comments + reactions |
+| Moderate | 2–4 review comments | Body + review comments listing |
+| Quiet | 0–1 review comments, not Cosmetic, not Key | One-line entry in inventory |
+
+#### Operating principle
+Bias toward completeness. In consolidated codebases, the contextual gem is usually the comment buried in a 6-year-old PR review. Missing it is a worse failure than producing verbose discovery notes.
+
+#### Not yet in v1.1
+- GitLab and Bitbucket equivalents (currently GitHub-only via `gh`).
+- Wiki/Confluence/Jira/Slack integration. Remote discovery is currently scoped to PRs, issues, and releases.
+- Rate-limit-aware streaming (skill currently fetches inventory in bulk; in repos with 20k+ PRs this may approach `gh` quotas).
+- Stack-specific heuristics (.NET, Java, Spring, EF Core, etc). Skill remains stack-agnostic.
+
+### v1.2 — Azure DevOps support
+
+Adds multi-provider remote discovery. Phase 3 becomes polymorphic, branching internally by provider while producing identical output structure regardless of which remote backs the repository.
+
+Motivation: GitHub-only tooling for context engineering is a known gap in the enterprise space. Brazilian consolidated companies commonly host code on Azure DevOps and Bitbucket. The v1.1 release skipped Phase 3 gracefully for non-GitHub repos, but skipping cost the user the most valuable part of the skill (PR review discussions and issue threads). This release adds Azure DevOps as the second supported provider, using `az` CLI plus direct REST calls. The provider abstraction is the foundation; further providers (GitLab, Bitbucket) follow the same pattern.
+
+#### Added in v1.2
+- **Provider detection** in Phase 1 — parses `git remote get-url origin`, identifies github/azure_devops/unknown, sets `provider` for Phase 3 to branch on.
+- **Phase 3b: Azure DevOps branch** — full mirror of Phase 3a using `az repos pr list/show`, `az repos pr show-work-items`, `az boards work-item query/show`, and direct REST calls for threads (Azure equivalent of inline review comments). Same Cosmetic/Key/Moderate/Quiet classification, same per-file and aggregate output files.
+- **WIQL queries** for work item discovery in Phase 3b, mapped to the "issues" module aggregate.
+- **Git tag fallback** for releases in Azure DevOps environments (Azure Pipelines Releases is a separate concept rarely used for release notes).
+- **Pagination handling** for Azure DevOps `az repos pr list`, since it does not expose `totalCount` directly.
+- **Rate limit handling** for Azure DevOps (~200 req/sec/user with typical PAT; pause-and-retry on 429, abort after 3 retries).
+- **PAT precondition documentation** in the skill: `AZURE_DEVOPS_EXT_PAT` must be exported in the shell that launched Claude Code.
+
+#### Changed in v1.2
+- Phase 1 (Pre-flight) now detects and validates per provider. Output prints `provider` alongside repo identifier and volume estimate.
+- Phase 3 is now polymorphic. Phase 3a (GitHub) keeps the v1.1 logic intact. Phase 3b (Azure DevOps) is new. Both produce the same downstream artifacts.
+- Phase 5 summary now prints which provider was used (or `skipped` if Phase 3 was bypassed).
+- Discovery notes (Phase 4) cross-reference work items in addition to GitHub issues, with consistent terminology in the output ("Issue" used as umbrella term).
+
+#### Provider differences preserved in the design
+| Aspect | GitHub | Azure DevOps |
+|---|---|---|
+| Inline review comments | PR comments with line context | Threads with `threadContext` |
+| Issues equivalent | Issues | Work Items (Bug/User Story/Task/etc) |
+| Reactions on comments | Yes (used as Key signal) | No (criterion dropped in 3b) |
+| Release notes | `gh release list/view` | Git tags as fallback |
+| Author identity | `@handle` | `displayName` |
+
+#### Not yet in v1.2
+- GitLab provider (next likely addition; uses `glab` CLI).
+- Bitbucket provider.
+- Self-hosted GitHub Enterprise or Azure DevOps Server (on-premise) — should mostly work but not validated.
+- Stack-specific heuristics (.NET, Java, Spring, EF Core, etc). Skill remains stack-agnostic.
+- Wiki/Confluence/Jira/Slack integration. Remote discovery is currently scoped to PRs/MRs, issues/work-items, and releases/tags.
+
+### v1.3 — Hotfix: az login not required for Azure DevOps auth
+
+Removes the dependency on `az account show` in Phase 1 auth validation for the Azure DevOps provider. The v1.2 check assumed an active Azure Cloud subscription, which many Azure DevOps users do not have. Phase 1 now validates DevOps access directly via `az repos pr list`, which reflects what the skill actually consumes.
+
+#### Changed
+- Phase 1 auth validation for `azure_devops` provider: replaced `az account show` + `az repos list` with a single `az repos pr list --repository "$REPO" --status all --top 1` call. PAT in `AZURE_DEVOPS_EXT_PAT` is the only auth requirement.
+- "Supported remote providers" table updated: note that `az login` is not required for Azure DevOps.
+- New racionalização added: "Preciso de `az login` antes de rodar a skill em Azure DevOps" → no, PAT alone suffices.
+- `discover.md` command documentation updated to drop the `az login` precondition.
+
+#### Why this matters
+Discovered in field validation against a real Azure DevOps repo: in Brazilian consolidated companies, Azure DevOps is frequently adopted standalone, without an Azure Cloud subscription. For these users, `az login` completes the browser auth but `az account show` reports "Please run 'az login' to setup account" because there is no Azure subscription. Under v1.2, this would falsely set `remote_discovery=false` and skip Phase 3 entirely, defeating the v1.2 release for the most common Azure DevOps user profile.
+
+#### Not changed
+- All other Phase 3b logic remains intact.
+- No changes to GitHub provider path.
+- No changes to output structure.
+- No changes to other phases.
+
+### v1.4 — Field-informed adaptations
+
+Incorporates four learnings from running v1.3 against a real Azure DevOps / .NET / PostgreSQL legacy at FaceSign. Three modules discovered (Core, Infra.Data, ExternalServices); all three exhibited patterns the v1.3 design did not anticipate. This release codifies the response without changing the core philosophy: defaults still bias toward completeness, but the skill is now smarter about detecting situations where completeness has low return.
+
+#### Added in v1.4
+- **Trunk-based culture detection** in Phase 1 — measures PR coverage of commits in the path. If `< 30%` of commits are linked to any PR, sets `trunk_based_detected=true`, which expands the Phase 4 commit message scan window from 20 to 40 entries. Field evidence: FaceSign has 3 years of commits with zero PRs (Jan 2023 – Mar 2026). When this is the case, decision history lives in commit messages, not in PR review threads, and the wider scan compensates for the absent remote layer.
+- **Phase 3 early-exit heuristic** (disabled by default) — when enabled, samples the 5 most recent PRs touching the path and counts human review comments (filtering known bots: DeepSource, SonarCloud, GitHub Actions, Dependabot, Renovate, Codecov, Codacy, GitGuardian, Snyk, and others). If none have 2+ human comments, Phase 3 runs in "lean mode" capturing only PR titles, bodies, authors, dates, and linked work items, skipping the expensive thread fetching and per-file remote context generation. Reduces Phase 3 time from 6-15 min to 1-2 min on repos without PR review culture. **Disabled by default** to preserve the bias toward completeness. Field evidence: FaceSign Phase 3 took 6-15 min per module to conclude all PRs were Quiet.
+- **Memory infrastructure detection** in Phase 1 — checks for `memory/index.py` and `memory/query.py` at the start, not at the end of Phase 5. Prints orientation message early ("not detected — discovery notes will be plain files, no semantic search across sessions"). Phase 5 still tries to index and now writes a "Memory indexing" section in the module summary documenting the status and recovery instructions.
+- **Auto-creation of ADR template** in Phase 5 — if `docs/architecture/adr-000-template.md` does not exist, the skill creates a minimal Nygard-simplified template before writing candidates. Avoids inconsistent ADR formatting when the target project has no prior ADR practice.
+- **`Tuning` section** in the skill documenting four configurable flags with rationale: `early_exit_enabled`, `trunk_based_threshold_pct`, `early_exit_sample_size`, `early_exit_comment_threshold`. Each can be overridden via env var (e.g., `LEGACY_CONTEXT_EARLY_EXIT=true claude`).
+- **`ROADMAP.md`** at the repo root, documenting future considerations explicitly out of scope for v1.4 (stack-specific heuristics, GitLab/Bitbucket providers, self-hosted instances, plugin architecture, wiki/Jira integration, incremental discovery, quality metrics, cross-project discovery). Living document for the broader blueprint, not just legacy-context.
+
+#### Changed in v1.4
+- Operating principle section explicitly references the new tunable defaults.
+- Phase 1 pre-flight summary now includes `trunk_based_detected`, `memory_infra`, `early_exit_enabled` alongside the existing fields.
+- Phase 4 commit scan window is now conditional on `trunk_based_detected`.
+- Phase 5 indexing failure now writes documentation to the module summary instead of just printing a warning.
+- Four new racionalizações added covering the new flags and behaviors.
+- `discover.md` command documentation updated with the new tunable env vars.
+
+#### Field-observed behaviors that informed this release
+Three modules of FaceSign (Core, Infra.Data, ExternalServices) were discovered with v1.3. Across all three:
+- 48 PRs total in the repo, 0 classified as Key, 1 as Moderate (where the comments were a DeepSource bot), 47 as Quiet. Zero human review comments on any PR.
+- 3 years of commit history (Jan 2023 – Mar 2026) with zero PRs.
+- Memory infrastructure absent in the target project; warning was discrete in v1.3 and easy to miss.
+- ADR template absent in the target project; v1.3 wrote candidates with inconsistent structure.
+- Phase 3 consumed 6-15 minutes per module producing aggregate files showing "all Quiet."
+
+These observations did not invalidate the skill — Phase 4 still surfaced critical security and architecture findings in all three modules. But they showed that the skill could be more aware of the environment it runs in. v1.4 codifies that awareness without changing the operating principle.
+
+#### Not in v1.4 (see ROADMAP.md)
+Stack-specific heuristics (deferred until 3+ stacks are validated). GitLab/Bitbucket providers (no concrete user yet). Self-hosted instance support (untested). Plugin architecture for Phase 3 (premature). Wiki/Confluence/Jira integration (different APIs per system, demand-driven). Incremental discovery (storage design open question). Cross-project discovery (hard scoping problem). Discovery quality metrics (planned for a future observability release alongside `/context stats`).
+
 ---
 
 Anthropic launched Claude Design (research preview, Pro/Max/Team/Enterprise).
@@ -200,12 +326,8 @@ Patterns incorporated from analysis of [addyosmani/agent-skills](https://github.
 - **CLAUDE.md template** with `[SPEC]` convention for project customization
 - **13 spec modules** in `docs/specs/`: compliance, security, observability, scalability, versioning, design-system, accessibility, i18n, testing-strategy, devops, data-architecture, ai-ml, long-term-memory
 - **7 skills**: implement-prd, frontend-agent, adr, memory, code-review, testing, _template-skill
-- **4 slash commands**: /implement, /deploy, /memory, /spec-review
-- **3 agents**: security-auditor (opus), compliance-auditor (opus), quality-guardian (sonnet)
-- **4 hooks**: lint-check (PostToolUse), security-check (PreToolUse), pre-commit-review (PreToolUse), docs-check (PreToolUse)
-- **Long-term memory** with Chroma (local) or pgvector (shared), semantic search, auto-indexing
-- **Bootstrap script** with `--level`, `--design`, `--review` flags
-- **Obsidian vault** structure: PRDs, ADRs, specs, runbooks, post-mortem templates
-- **Docs**: orchestration workflow, design flow guide, L4 setup guide, code review gates spec
-- **CI**: GitHub Actions workflow validating blueprint structure
-- **Templates**: PRD, ADR, post-mortem, skill, deliverables schema
+- **8 commands**: /implement, /deploy, /memory, /spec-review, /debug, /refactor, /debt, /clean
+- **3 agents**: security-auditor, compliance-auditor, quality-guardian
+- **3 hooks**: docs-check.sh, lint-check.sh, security-check.sh
+- **Memory layer** with Chroma support for L4
+- **Bootstrap script** with maturity level prompts
