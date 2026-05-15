@@ -29,6 +29,13 @@ in a 6-year-old PR review or the issue closed as "wontfix" with three
 paragraphs of reasoning. Missing those is a worse failure than producing
 verbose discovery notes.
 
+This bias is reflected in the defaults: the early-exit heuristic in
+Phase 3 is **disabled by default**, the trunk-based threshold is set
+conservatively (30% PR coverage), and commit message scans extend
+automatically when remote layers prove thin. Users who prefer speed
+over completeness can flip the relevant flags in the "Tuning" section
+of Phase 1.
+
 ## Supported remote providers
 
 | Provider | Detection | Auth | Notes |
@@ -137,6 +144,61 @@ before committing to a long run.
    (`owner/repo` or `org/project/repo`), estimated PR count, estimated
    issue/work-item count, `remote_discovery` flag.
 
+7. Detect PR coverage to identify trunk-based-without-PRs cultures:
+   ```bash
+   # Total commits in the path
+   TOTAL_COMMITS=$(git log --oneline -- <path> | wc -l)
+   # Unique commits referenced by all known PRs (uses cached inventory
+   # from steps 4-5 if remote_discovery=true; otherwise skips this check)
+   PR_LINKED_COMMITS=<count of unique SHAs across all PR commit lists>
+   COVERAGE_PCT=$(echo "scale=2; $PR_LINKED_COMMITS * 100 / $TOTAL_COMMITS" | bc)
+   ```
+   If `COVERAGE_PCT < 30`, set internal flag `trunk_based_detected=true`.
+   This means 70%+ of commits in the path were merged outside any PR,
+   which is typical of trunk-based or pre-PR-discipline cultures. Phase
+   4 will compensate by scanning more commit messages (40 instead of 20)
+   when this flag is set. The 30% threshold is configurable; rationale
+   below in "Tuning".
+
+8. Detect memory infrastructure availability:
+   ```bash
+   test -f memory/index.py && test -f memory/query.py && \
+     echo "memory_infra=true" || echo "memory_infra=false"
+   ```
+   If `memory_infra=false`, print a visible orientation message early in
+   the output: "Memory infrastructure not detected. Discovery notes will
+   be written as plain files in memory/discoveries/ but semantic search
+   across sessions will not work. To enable: copy memory/ from the
+   claude-proj-blueprint repo and run `pip install -r
+   memory/requirements.txt`." This is informational, does not block.
+
+9. Print a one-line pre-flight summary: `provider`, repo identifier,
+   estimated PR count, `remote_discovery`, `trunk_based_detected`,
+   `memory_infra`, `early_exit_enabled` (see Tuning below).
+
+## Tuning
+
+Several heuristics in this skill are tunable. The defaults bias toward
+**completeness** (capture more, even if it costs time). The flags below
+let users override that bias when needed.
+
+| Flag | Default | Effect when changed |
+|---|---|---|
+| `early_exit_enabled` | `false` | If `true`, Phase 3 samples the first 5 PRs touching the path and skips deep fetching when none have 2+ human review comments. Saves 6-15 min per module on repos without PR review culture, at the risk of missing a single dense PR hidden later. See "Phase 3 early-exit" below. |
+| `trunk_based_threshold_pct` | `30` | The PR coverage percentage below which the repo is classified as trunk-based. Lower = more permissive (more repos classified as trunk-based, more aggressive commit message scanning). Higher = stricter. |
+| `early_exit_sample_size` | `5` | Number of recent PRs sampled before deciding to early-exit. Larger sample = more confidence in the decision, more API calls. |
+| `early_exit_comment_threshold` | `2` | Minimum human review comments in a sampled PR to consider "dense discussion present". Comments from known bots (DeepSource, SonarCloud, GitHub Actions, etc.) are filtered out before counting. |
+
+To override, edit the values at the top of this skill file, OR pass via
+environment variables when invoking Claude Code:
+
+```bash
+LEGACY_CONTEXT_EARLY_EXIT=true claude
+```
+
+The skill reads these env vars on activation and applies them for the
+current session.
+
 ### Phase 2: Survey
 
 Map the territory before reading anything in depth. Window widened for
@@ -202,6 +264,50 @@ not just the priority ones from the survey.
 
 Branch by provider. Both branches produce the same output structure
 (per-file remote contexts plus three module aggregates).
+
+#### Phase 3 early-exit (default: disabled)
+
+If `early_exit_enabled=true`, run this sampling step before the full
+inventory build. The goal is to detect repos where the deep Phase 3 work
+will not pay off, and offer the user a reduced mode.
+
+1. Sample the 5 most recent PRs that touched the path. For each, count
+   human review comments, filtering bots by author display name or login:
+   - GitHub: filter authors matching `*[bot]`, `dependabot`, `renovate`,
+     `deepsource`, `sonarcloudio`, `codecov`, `github-actions`,
+     `codacy-bot`, `gitguardian`, `snyk-bot`.
+   - Azure DevOps: filter authors matching `*deepsource*`, `*sonar*`,
+     `*ci-bot*`, `*pipeline*` (case-insensitive on `displayName`).
+
+2. If at least one sampled PR has `early_exit_comment_threshold` or more
+   human comments, proceed with full Phase 3 as normal.
+
+3. If NONE of the sampled PRs has enough human discussion, set internal
+   flag `early_exit_triggered=true` and print:
+   ```
+   Early-exit heuristic triggered: sampled 5 recent PRs touching the
+   path, none had 2+ human review comments. Running Phase 3 in "lean
+   mode" to save time. To force full Phase 3, set
+   early_exit_enabled=false or rerun with LEGACY_CONTEXT_EARLY_EXIT=false.
+   ```
+
+4. In lean mode, Phase 3 captures only:
+   - PR title, body, author, state, merge date
+   - Linked work items (Azure DevOps) or linked issues (GitHub)
+   - File list touched
+   Skip: thread fetching, inline review comment fetching, per-file
+   remote context generation. Only the three module aggregate files are
+   produced (`<module>-remote-summary.md`, `<module>-issues.md`,
+   `<module>-releases.md`). The summary documents that lean mode ran.
+
+5. Lean mode reduces typical Phase 3 time from 6-15 minutes to 1-2
+   minutes, at the cost of missing PR discussion details. Use full mode
+   when in doubt; lean mode is for repeated runs on repos already known
+   to have low PR discussion density.
+
+If `early_exit_enabled=false` (default), skip this entire sub-section
+and proceed directly to "Phase 3a" or "Phase 3b" below. The skill
+defaults to completeness: capture everything, even when it costs.
 
 #### Phase 3a: GitHub provider
 
@@ -424,9 +530,16 @@ in depth and cross-references with remote findings from Phase 3.
    to identify implicit owners (recurring authors). Flag authors who are
    no longer in `git shortlog -sn --since="6 months ago"` — that
    contextual knowledge has left the building.
-3. Read the last 20 commit messages that touched the file:
+3. Read the last N commit messages that touched the file. N depends on
+   the `trunk_based_detected` flag from Phase 1:
+   - If `trunk_based_detected=false`: read last 20 commits (standard).
+   - If `trunk_based_detected=true`: read last 40 commits. Rationale:
+     when 70%+ of commits never went through PRs, the decision history
+     is hidden in commit messages, not in remote review threads. Wider
+     scan compensates for the missing remote layer.
+
    ```bash
-   git log -20 --pretty=format:"%h %ad %an %s" --date=short -- <file>
+   git log -<N> --pretty=format:"%h %ad %an %s" --date=short -- <file>
    ```
 4. Load `memory/discoveries/<module-slug>/<file-slug>-remote.md` if it
    exists. The Key PRs section is required reading; Moderate is
@@ -467,15 +580,49 @@ Move discovery output into the layers that tiered lookup queries.
    recurring topic across PR discussions (cross-check the
    `<module-slug>-remote-summary.md`).
 2. For each candidate, write a draft to
-   `docs/architecture/_candidates/adr-XXX-<topic>.md` using the template
-   in `docs/architecture/adr-000-template.md`. Mark it explicitly as
-   `Status: candidate — needs human review`. Reference the source PRs
-   and files that supported the pattern detection.
+   `docs/architecture/_candidates/adr-XXX-<topic>.md`. If
+   `docs/architecture/adr-000-template.md` exists, use it. If not, the
+   skill creates a minimal template at that path before writing
+   candidates, using the Nygard-simplified structure:
+   ```markdown
+   ---
+   status: <draft | candidate | accepted | superseded>
+   date: YYYY-MM-DD
+   sources: <files and PRs that supported this decision record>
+   ---
+
+   # ADR-XXX: <short imperative title>
+
+   ## Status
+   <one line>
+
+   ## Context
+   <what is the situation that demands a decision>
+
+   ## Decision
+   <what is being decided>
+
+   ## Consequences
+   <positive, negative, neutral effects>
+
+   ## Sources
+   <discovery notes, PRs, files that informed this>
+   ```
+   Mark each candidate explicitly as `Status: candidate — needs human
+   review`. Reference the source PRs and files that supported the
+   pattern detection.
 3. Run `python memory/index.py --incremental` to index discovery notes
    and ADR candidates into semantic memory. If `memory/index.py` is not
-   available in the target project, skip with a visible warning and
-   continue. The text files in `memory/discoveries/` are still useful
-   without semantic indexing.
+   available in the target project, skip with a visible warning AND
+   write a "Memory indexing" section in the
+   `<module-slug>-remote-summary.md` documenting that:
+   - Indexing did not run
+   - Discovery notes still work as plain markdown files
+   - Future sessions will need to discover them via `glob` + `read`
+     instead of semantic query
+   - How to enable indexing later (copy `memory/` from
+     claude-proj-blueprint repo and run `pip install -r
+     memory/requirements.txt`)
 4. Print a final summary to the user:
    - Provider used (github | azure_devops | skipped)
    - Files explored in depth
@@ -518,6 +665,9 @@ applies what makes sense, and discards the rest.
 | "GitHub e Azure DevOps são iguais, posso reusar a Phase 3a" | API e modelo de dados diferem. Threads em Azure ≠ inline comments em GitHub. Work items ≠ issues. A Phase 3b traduz isso pro mesmo output. |
 | "PAT do Azure funciona se eu colocar no .zshrc" | Funciona, mas vaza o token em arquivo de config. Exporta na sessão e fecha. Trabalho de cliente, segurança importa. |
 | "Preciso de `az login` antes de rodar a skill em Azure DevOps" | Não. O PAT exportado em `AZURE_DEVOPS_EXT_PAT` basta. Muito usuário tem acesso ao DevOps sem subscription Azure Cloud, então `az login` nem completa. A skill valida acesso real via `az repos pr list`. |
+| "Vou ativar early-exit pra economizar tempo, todo repo é igual" | Repos com e sem cultura de PR review têm densidade muito diferente. Em repo com review forte (open source maduro, fintech regulada), early-exit perde contexto crítico. Default é desligado por isso. Liga quando vc já validou que o repo trabalha trunk-based. |
+| "Trunk-based threshold de 30% é arbitrário" | É heurística baseada em observação de campo, não lei. Repos saudáveis com PRs costumam ter 80-95% de coverage. Repos que adotaram PRs recentemente ficam em 20-50%. 30% separa razoavelmente os dois cenários no contexto brasileiro consolidado. Ajusta no flag. |
+| "Não tem template ADR, vou criar depois manualmente" | Skill cria automaticamente se ausente. Template segue Nygard simplificado. Se vc tem template próprio, coloca em `docs/architecture/adr-000-template.md` antes de rodar `/discover` que a skill respeita. |
 
 ## Red Flags
 
