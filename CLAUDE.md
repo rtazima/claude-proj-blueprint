@@ -64,7 +64,33 @@ These phrases are auto-detected and activate the corresponding workflow:
 - "build me feature" / "implement feature" → /implement flow
 - "security audit" / "compliance audit" → /spec-review flow
 - "learn from this" / "retrospective" → learner skill
-- "legacy code" / "código legado" / "discover module" / "arqueologia" → legacy-context skill (run before context-engineering on old modules)
+- "legacy code" / "código legado" / "discover module" / "descobrir módulo" / "entender legado" / "arqueologia" / "por que esse código" → context-legacy skill (run before context-engineering on old modules)
+
+## Legacy code discovery
+
+Use the `context-legacy` skill (via `/discover`) to explore any unfamiliar or legacy module before modifying it.
+
+The skill runs 6 phases sequentially:
+
+0. **Memory query** — check if already discovered, skip redundant work
+1. **Code archaeology** — static analysis, public interface, surprising patterns
+2. **Git history** — churn, authors, regression commits, decision messages, git blame (targeted), dead PR scan
+3. **Jira enrichment** — ticket history, bug patterns, decision comments, epic chain _(skipped if `JIRA_*` not set in `.env`)_
+4. **Cross-reference** — correlates signals from all sources
+5. **Output** — writes `docs/architecture/legacy-context-{module}-{date}.md` with ADR candidates and PRD candidates
+
+Output from each run seeds:
+- `adr` skill — to formalize decisions found in code/history
+- `prd-writer` skill — to draft specs for behaviors found in Jira but absent from docs
+- `intent-markers` skill — to annotate `:HACK:`, `:UNSAFE:`, `:FLAKY:` in code
+
+**To enable Jira enrichment**, add to `.env`:
+```
+JIRA_BASE_URL=https://your-company.atlassian.net
+JIRA_EMAIL=your@email.com
+JIRA_API_TOKEN=<token from id.atlassian.com>
+JIRA_PROJECT_KEY=PROJ
+```
 
 ## Workflow Rules
 [SPEC] Workflow rules. Example:
