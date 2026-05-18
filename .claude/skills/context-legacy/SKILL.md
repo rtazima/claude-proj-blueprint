@@ -1,22 +1,41 @@
 ---
 name: context-legacy
-description: "Legacy code archaeology — multi-phase discovery that reads the codebase, git history, and optionally Jira to reconstruct WHY code exists, producing a context document that seeds ADR candidates and PRD notes for review. Activated when user says 'descobrir módulo', 'arqueologia de código', 'entender legado', 'contexto do módulo', 'por que esse código', 'legacy context', '/discover', or when starting work on an unfamiliar legacy module."
-allowed tools: Read, Bash, Write, Edit, Glob
+description: "Legacy code archaeology — multi-phase discovery that reads the codebase, git history, and optionally Jira to reconstruct WHY code exists. Produces discovery notes, ADR candidates, and PRD candidates for human review. Activated when user says 'descobrir módulo', 'arqueologia de código', 'entender legado', 'contexto do módulo', 'por que esse código', 'legacy context', '/discover', or when starting work on an unfamiliar legacy module."
+allowed tools: Read, Bash, Write, Glob
 ---
 
 # Context Legacy Skill
 
-Multi-phase discovery for legacy code. Reads code, git, and optionally Jira to reconstruct intent. Output seeds ADR and PRD review — never modifies source.
+Multi-phase discovery for legacy code. Reads code, git, and optionally Jira to reconstruct intent.
+Never modifies source files. All output goes to `memory/discoveries/` and `docs/`.
 
 ## Phases
 
 ```
-Phase 1 → Code archaeology      (static analysis, always)
+Phase 0 → Memory query          (check what's already indexed — avoid redoing work)
+Phase 1 → Code archaeology      (static analysis — always)
 Phase 2 → Git history           (always)
-Phase 3 → Jira enrichment       (only if JIRA_* env vars present)
+Phase 3 → Jira enrichment       (only if JIRA_* env vars present in .env)
 Phase 4 → Cross-reference       (synthesize all signals)
-Phase 5 → Output generation     (context doc + ADR candidates + PRD notes)
+Phase 5 → Output generation     (notes + candidates + re-index)
 ```
+
+---
+
+## Phase 0 — Memory query
+
+Before reading any code, check if the module was already discovered.
+
+```bash
+memory/.venv/bin/python -m memory.query "<module_name>" 2>/dev/null | head -30
+```
+
+If results show prior discovery notes for this module:
+- Read `memory/discoveries/<module-slug>-survey.md` if it exists
+- Note what's already known — skip re-deriving it in Phases 1–2
+- Focus new work on gaps or on Jira context not yet captured
+
+If no prior results, proceed to Phase 1 fresh.
 
 ---
 
@@ -28,128 +47,128 @@ Phase 5 → Output generation     (context doc + ADR candidates + PRD notes)
 # Map the target
 find <module_path> -type f | sort
 wc -l <module_path>/**/* 2>/dev/null | sort -rn | head -20
+
+# Hot files: most commits in last 2 years
+git log --since="2 years ago" --pretty=format: --name-only -- <module_path> \
+  | sort | uniq -c | sort -rn | head -10
+
+# Cold files: untouched 3+ years, still present
+git log --before="3 years ago" --name-only --pretty=format: -- <module_path> \
+  | sort -u > /tmp/cold-all.txt
+git log --since="3 years ago" --name-only --pretty=format: -- <module_path> \
+  | sort -u > /tmp/cold-recent.txt
+comm -23 /tmp/cold-all.txt /tmp/cold-recent.txt
 ```
 
-Read the main files. For each, note:
-- Public interface (classes, functions exported)
-- Non-obvious dependencies (`#include`, imports)
-- Areas that look complex, fragile, or surprising
-- Any existing comments that hint at WHY (not just what)
+Read hot and cold files first. For each, note:
+- Public interface (classes, functions exported, iface.hh for C++)
+- Non-obvious dependencies (`#include`, imports, `deps` file)
+- Surprising patterns — magic numbers, global state, platform ifdefs
+- Existing comments that hint WHY (not what)
 - Markers already present (`:HACK:`, `:UNSAFE:`, `TODO`, `FIXME`, `XXX`)
 
-Look specifically for:
-- Constants or magic numbers without explanation
-- Code paths with no apparent caller (dead code candidates)
-- Unusual patterns — global state, platform ifdefs, retry loops
-
-**Output:** a bullet list of `[FOUND]` notes carried into Phase 4.
+**Output:** bullet list of `[CODE]` notes. Write survey to `memory/discoveries/<module-slug>-survey.md`.
 
 ---
 
 ## Phase 2 — Git history
 
-**Goal:** find churn, authors, regressions, and the commit messages that explain decisions.
+**Goal:** find churn, authors, regressions, and commit messages that explain decisions.
 
 ```bash
-# High-level history for the module
-git log --oneline --follow -- <file_or_dir> | head -40
-
-# Churn: files changed most often
+git log --oneline -- <module_path> | head -40
 git log --name-only --pretty=format: -- <module_path> | sort | uniq -c | sort -rn | head -15
-
-# Authors
 git shortlog -sn -- <module_path> | head -10
-
-# Last time each file was touched
-git log -1 --pretty=format:"%ad %an" --date=short -- <file> for each file
-
-# Full messages of the most recent 10 commits
-git log --format="%H %ad %an%n%s%n%b%n---" --date=short -10 -- <module_path>
+git log --format="%H %ad %an%n%s%n%b%n---" --date=short -20 -- <module_path>
 ```
 
-Flag commits that contain keywords: `fix`, `revert`, `hack`, `workaround`, `urgent`, `critical`, `regression`, `broke`, `undo`.
+Flag commits containing: `fix`, `revert`, `hack`, `workaround`, `urgent`, `regression`, `broke`, `undo`.
 
 Look for:
-- Files with high churn (changed > 5 times) — instability signal
+- Files changed > 5 times — instability signal
 - Commits that revert previous commits — regression cycle
 - Long commit bodies — usually explain a hard decision
 - Single-author files — knowledge silo risk
 
-**Output:** a bullet list of `[GIT]` notes carried into Phase 4.
+**Output:** bullet list of `[GIT]` notes.
 
 ---
 
 ## Phase 3 — Jira enrichment (optional)
 
-**Check first — skip if not configured:**
+**Check first — skip entirely if not configured:**
 
 ```bash
-# Check if Jira is configured
-if [ -f .env ]; then source .env 2>/dev/null; fi
+[ -f .env ] && source .env 2>/dev/null
 if [ -z "$JIRA_BASE_URL" ] || [ -z "$JIRA_API_TOKEN" ]; then
-  echo "JIRA not configured — skipping Phase 3"
-  echo "To enable: add JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_PROJECT_KEY to .env"
-  exit 0
+  echo "[JIRA] Not configured — skipping Phase 3"
+  echo "       To enable: add JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_PROJECT_KEY to .env"
 fi
 ```
 
-If configured, run `scripts/jira-context-fetch.sh`:
+If configured:
 
 ```bash
 bash scripts/jira-context-fetch.sh \
-  --term "<module_name_or_key_terms>" \
-  --project "$JIRA_PROJECT_KEY" \
-  --output /tmp/jira-raw.md
+  --term "<module_name>" \
+  --term "<key_class_or_file_stem>" \
+  --output memory/discoveries/<module-slug>-jira.md
 ```
 
-The script fetches and structures:
-1. All tickets mentioning the module (JQL: `text ~ "term"`)
-2. Bug-type tickets specifically (pattern: what broke and how it was fixed)
-3. Comments with decision keywords (`decided`, `because`, `workaround`, `intentional`)
-4. Parent epics — one level up for business context
-5. Linked issues — lateral coupling map
-
-From the script output, extract `[JIRA]` notes:
-- Recurring bugs in the same area → instability confirmation
-- Comments explaining a workaround → `:HACK:` candidate
+From the output extract `[JIRA]` notes:
+- Recurring bugs → instability confirmation
+- Decision-type comments → `:HACK:` candidate
 - Epic description → business reason this module exists
-- Linked modules → coupling map for architecture review
+- Linked issues → coupling map
 
-**Output:** a bullet list of `[JIRA]` notes carried into Phase 4. If Phase 3 was skipped, note it.
+If 0 results, broaden terms (drop extension, try directory name, try acronym only).
+
+**Output:** bullet list of `[JIRA]` notes. Raw output already written to `memory/discoveries/<module-slug>-jira.md`.
 
 ---
 
 ## Phase 4 — Cross-reference and synthesis
 
-**Goal:** correlate signals across all three phases to find the real story.
-
-Cross-reference patterns to look for:
+**Goal:** correlate signals from CODE, GIT, and JIRA to find the real story.
 
 | Signal combination | Interpretation |
 |---|---|
-| High git churn + recurring Jira bugs | Fragile area, likely needs refactor |
+| High churn + recurring Jira bugs | Fragile area — refactor candidate |
 | Complex code + no git explanation + no Jira | Undocumented decision — ADR candidate |
-| Workaround comment in code + Jira bug comment | `:HACK:` marker confirmed |
-| Single author in git + no spec docs | Knowledge silo — needs PRD for review |
-| Epic describes feature X + code implements Y differently | Spec drift — PRD note |
-| Commit message references ticket not found in Jira | Missing history — note it |
+| Workaround in code + Jira bug comment | `:HACK:` marker confirmed |
+| Single author in git + no spec docs | Knowledge silo — PRD candidate |
+| Epic describes X + code implements Y | Spec drift — PRD candidate |
+| Commit refs a ticket not in Jira results | Missing history — note it |
 
-Produce a **synthesis table** with three columns: Area | Signals | Interpretation.
+Produce a synthesis table: Area | Signals | Interpretation.
 
 ---
 
 ## Phase 5 — Output generation
 
-Write one document to `docs/architecture/legacy-context-{module-slug}-{YYYY-MM-DD}.md`.
+### 5a — Per-file discovery notes
 
-Use this structure exactly:
+For each hot and cold file, write `memory/discoveries/<module-slug>/<file-slug>.md`:
 
 ```markdown
-# Legacy Context: {Module}
+## <filename>
 
-**Target:** {file or directory}
-**Date:** {YYYY-MM-DD}
-**Jira:** {configured / not configured / skipped}
+**Purpose:** one paragraph, code-derived, no speculation
+**Apparent decisions:** embedded choices not explained anywhere
+**Critical dependencies:** other files, modules, env vars this file relies on
+**Risks:** accidental coupling, dead code, partial migrations
+```
+
+### 5b — Main context document
+
+Write `docs/architecture/legacy-context-<module-slug>-<YYYY-MM-DD>.md`:
+
+```markdown
+# Legacy Context: <Module>
+
+**Target:** <path>
+**Date:** <YYYY-MM-DD>
+**Jira:** configured | not configured | skipped
 
 ---
 
@@ -161,68 +180,129 @@ Use this structure exactly:
 
 | # | Source | Area | Finding |
 |---|--------|------|---------|
-| 1 | CODE | {file:line} | {what was found} |
-| 2 | GIT | {file} | {commit pattern or message} |
-| 3 | JIRA | {KEY-123} | {ticket or comment excerpt} |
-| ... | | | |
+| 1 | CODE | <file:line> | <what was found> |
+| 2 | GIT  | <file> | <commit pattern> |
+| 3 | JIRA | <KEY-123> | <ticket excerpt> |
 
 ## Synthesis
 
-{3–6 sentences connecting the signals. What is the real picture?}
-
-## ADR candidates
-
-For each decision found that is not formalized:
-
-### ADR-?: {Decision title}
-- **Evidence:** {where the decision appears — code, git, jira}
-- **Context:** {why it was made, as reconstructed}
-- **Status:** Proposed — needs review
-- **Action:** run `/adr` to formalize
-
-## PRD notes for review
-
-For each behavior or feature found in Jira/git that is not in `docs/product/`:
-
-- **{Feature or behavior}** — found in {source}, not in product docs. Review whether it needs a PRD.
-
-## Intent markers to add
-
-Suggested annotations to add to source code based on discoveries:
-
-| File | Line area | Marker | Reason |
-|------|-----------|--------|--------|
-| {file} | {function or block} | `:HACK:` | {evidence} |
-| {file} | {function or block} | `:UNSAFE:` | {evidence} |
-| {file} | {function or block} | `:FLAKY:` | {evidence} |
+{3–6 sentences connecting the signals.}
 
 ## Knowledge silos
-
-Authors who are sole contributors to critical areas:
 
 | Author | Area | Last commit | Risk |
 |--------|------|-------------|------|
 
 ## Next steps
 
-- [ ] Review ADR candidates above — run `/adr` for each
-- [ ] Check PRD notes — decide which need formal specs
-- [ ] Add intent markers to source files
-- [ ] Share context doc with team before modifying this module
-- [ ] If Jira was not configured: add JIRA_* to .env and re-run for richer history
+- [ ] Review ADR candidates in docs/architecture/_candidates/
+- [ ] Review PRD candidates in docs/product/_candidates/
+- [ ] Apply intent markers from memory/discoveries/<module-slug>/markers.patch
+- [ ] Share this doc before modifying the module
 ```
 
-After writing the document:
-1. Tell the user the path and a one-sentence summary of what was found
-2. List the ADR candidates by title
-3. Offer: "Run `/adr` for any of these to formalize them, or `/prd` to draft a PRD from the PRD notes."
+### 5c — ADR candidates (one file per candidate)
+
+For each undocumented decision found, write `docs/architecture/_candidates/adr-candidate-<topic>.md`:
+
+```markdown
+# ADR Candidate: <Decision title>
+
+**Status:** candidate — needs human review
+**Source:** <CODE | GIT | JIRA — where the decision was found>
+**Evidence:** <specific file, line, commit, or ticket>
+
+## Reconstructed context
+
+<Why this decision was likely made, as inferred from signals>
+
+## Why this needs an ADR
+
+<What breaks or becomes risky if someone changes this without knowing the decision>
+
+## Suggested action
+
+- [ ] Validate reconstruction with original authors if available
+- [ ] Formalize with `/adr` if confirmed
+- [ ] Delete this file if the decision was accidental (not intentional)
+```
+
+Only create a candidate if at least 2 independent signals point to the same decision.
+
+### 5d — PRD candidates (one file per candidate)
+
+For each behavior found in Jira/git but absent from `docs/product/`, write `docs/product/_candidates/prd-candidate-<topic>.md`:
+
+```markdown
+# PRD Candidate: <Feature or behavior>
+
+**Status:** candidate — needs human review
+**Source:** <JIRA ticket | git commit | code comment>
+**Evidence:** <specific ticket key, commit hash, or file>
+
+## What was found
+
+<Description of the behavior or feature, as found in the source>
+
+## Why it may need a PRD
+
+<Is this a feature users depend on? A compliance requirement? A business rule?>
+
+## Suggested action
+
+- [ ] Confirm this is intentional and still active
+- [ ] Draft full PRD with `/prd` if confirmed
+- [ ] Delete this file if the behavior is obsolete
+```
+
+### 5e — Intent marker patch
+
+Write `memory/discoveries/<module-slug>/markers.patch` with suggested markers.
+Each suggestion must have a one-line justification. Patch is never auto-applied.
+
+```
+# Suggested intent markers for <module> — review before applying
+#
+# <file>:<line-area> — <justification>
++ // :HACK: <reason>
++ // :UNSAFE: <reason>
++ // :FLAKY: <reason>
+```
+
+### 5f — Re-index memory
+
+After all files are written:
+
+```bash
+memory/.venv/bin/python -m memory.index --incremental
+```
+
+If the venv doesn't exist, document the skip:
+```
+[MEMORY] Skipping re-index — memory/.venv not found.
+         Run: python3 -m venv memory/.venv && memory/.venv/bin/pip install -r memory/requirements.txt
+         Then: memory/.venv/bin/python -m memory.index
+```
 
 ---
 
-## Notes
+## Final summary to user
 
-- Never modify source files. This skill is read-only on code.
-- If a file is too large to read fully, prioritize: public interface → areas flagged in git/Jira → constructor/init code → teardown/cleanup
-- If git history is empty (no git repo), note it and proceed with Phases 1 and 3 only
-- If Jira returns 0 results, try broader terms (drop file extension, try class name only, try directory name)
-- Produce the document even if Phases 2 and 3 are empty — partial context is still useful
+After Phase 5:
+1. Print path to the main context doc
+2. List ADR candidates created (paths)
+3. List PRD candidates created (paths)
+4. State memory index result (indexed N chunks / skipped)
+5. Offer: "Run `/adr` on any candidate to formalize it, or open the file and delete it if it's not a real decision."
+
+---
+
+## Rules
+
+- Never modify source files. Read-only on code.
+- If a file exceeds 2000 lines, treat as sub-module — read interface + hot sections only
+- If git history is empty, skip Phase 2 and note it
+- If Jira returns 0 results, try broader terms before giving up
+- Only create an ADR candidate when 2+ independent signals confirm the same decision
+- Only create a PRD candidate when the behavior is non-obvious and not in docs/product/
+- Produce output even if some phases are empty — partial context is still useful

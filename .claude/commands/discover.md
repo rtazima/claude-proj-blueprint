@@ -1,17 +1,20 @@
-Legacy code archaeology for a module or file. Reconstructs intent using static analysis, git history, and Jira (when configured). Produces context docs that seed ADR candidates and PRD notes.
+Legacy code archaeology. Reads code, git history, and Jira (when configured) to reconstruct WHY a module exists. Produces discovery notes in memory/, ADR candidates and PRD candidates in docs/ for human review, then re-indexes memory.
 
-Arguments: $ARGUMENTS (module path, file path, or multiple paths separated by spaces)
+Arguments: $ARGUMENTS (one or more module paths or file paths, space-separated)
 
 Workflow:
 1. Activate the `context-legacy` skill
-2. Run the 5 phases for each target in $ARGUMENTS:
-   - Phase 1: Code archaeology — map files, read public interfaces, find surprising patterns
-   - Phase 2: Git history — churn, authors, regression commits, decision messages
-   - Phase 3: Jira enrichment — if JIRA_* present in .env, search for related tickets, bugs, comments, epics
-   - Phase 4: Cross-reference — correlate signals from code, git, and Jira
-   - Phase 5: Output — write docs/architecture/legacy-context-{module}-{date}.md
-3. When multiple paths are given, run phases 1–3 for each, then synthesize phase 4–5 together
-4. After writing the context doc, list ADR candidates and offer to run /adr for any of them
+2. For each target in $ARGUMENTS, run all phases in order
+3. Never modify source files — read-only on code
 
-Output: docs/architecture/legacy-context-{module}-{YYYY-MM-DD}.md
-Never modify source files.
+Output paths:
+- Survey:            memory/discoveries/<module-slug>-survey.md
+- Per-file notes:    memory/discoveries/<module-slug>/<file-slug>.md
+- Jira notes:        memory/discoveries/<module-slug>-jira.md
+- Main context doc:  docs/architecture/legacy-context-<module-slug>-<date>.md
+- ADR candidates:    docs/architecture/_candidates/adr-candidate-<topic>.md
+- PRD candidates:    docs/product/_candidates/prd-candidate-<topic>.md
+- Marker patch:      memory/discoveries/<module-slug>/markers.patch
+
+After all targets are processed, run:
+  memory/.venv/bin/python -m memory.index --incremental
