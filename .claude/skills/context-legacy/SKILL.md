@@ -73,12 +73,21 @@ Read hot and cold files first. For each, note:
 
 ## Phase 2 — Git history
 
-**Goal:** find churn, authors, regressions, and commit messages that explain decisions.
+**Goal:** find churn, authors, regressions, commit messages that explain decisions, line-level ownership, and abandoned technical paths.
+
+### 2a — Log and churn
 
 ```bash
+# Full history for the module
 git log --oneline -- <module_path> | head -40
+
+# Churn per file
 git log --name-only --pretty=format: -- <module_path> | sort | uniq -c | sort -rn | head -15
+
+# Authors
 git shortlog -sn -- <module_path> | head -10
+
+# Last 20 commits with full message body (decisions live in the body)
 git log --format="%H %ad %an%n%s%n%b%n---" --date=short -20 -- <module_path>
 ```
 
@@ -90,7 +99,70 @@ Look for:
 - Long commit bodies — usually explain a hard decision
 - Single-author files — knowledge silo risk
 
-**Output:** bullet list of `[GIT]` notes.
+### 2b — git blame (targeted)
+
+Run blame only on files flagged as hot or suspicious in 2a. Do not blame every file — too noisy.
+
+```bash
+# For each hot or suspicious file:
+git blame --line-porcelain <file> | grep -E "^author |^author-time |^summary " \
+  | paste - - - | sort -k4 -n | head -20
+```
+
+From blame, identify:
+- **Ancient lines in active files** — code written 5+ years ago that nobody has touched, living inside files that change frequently. These are "load-bearing walls" — usually critical constraints or workarounds that survive because removing them broke something once.
+- **Ownership concentration** — sections where a single author wrote 80%+ of lines. Knowledge silo risk.
+- **Recent touches to old code** — a recent commit date on code that was originally written years ago. Someone changed something in a sensitive area — read that commit message carefully.
+
+```bash
+# Find oldest surviving lines in a hot file
+git blame --line-porcelain <file> \
+  | awk '/^author-time/{t=$2} /^\t/{print t, $0}' \
+  | sort -n | head -10
+```
+
+**Output:** `[BLAME]` notes for each ancient-line or ownership-concentration finding.
+
+### 2c — Dead PRs (abandoned technical paths)
+
+PRs closed without merge are the most honest archaeological record. They show what was tried, debated, and rejected — the WHY that almost never ends up in code or commit messages.
+
+```bash
+# Check if gh is available and authenticated
+gh auth status 2>/dev/null || echo "gh not available — skipping dead PR scan"
+```
+
+If `gh` is available:
+
+```bash
+# List closed PRs that were NOT merged, touching files in this module
+gh pr list --state closed --limit 100 \
+  --json number,title,body,closedAt,mergedAt,author,headRefName,files \
+  | jq '[.[] | select(.mergedAt == null)]'
+```
+
+For each dead PR, cross-reference files against `<module_path>`. Keep only PRs that touched at least one file in the target module.
+
+For matching dead PRs, fetch discussion:
+
+```bash
+gh pr view <number> --json title,body,closedAt,author,comments,reviews \
+  | jq '{title, body: .body[:500], closedAt, author: .author.login,
+          comments: [.comments[]? | {author: .author.login, body: .body[:300]}],
+          reviews: [.reviews[]? | {author: .author.login, state, body: .body[:300]}]}'
+```
+
+Extract `[DEAD-PR]` notes:
+- Title + description → what was the intent of the abandoned path
+- Review comments → why it was rejected (this is gold)
+- Author + date → who proposed it and when
+- Branch name → sometimes reveals context (`fix/fram-corruption`, `feat/new-persistence-v4`)
+
+If `gh` is not available or the remote is not GitHub, skip this sub-phase with a note.
+
+**Output:** `[DEAD-PR]` notes for each relevant abandoned PR. Write to `memory/discoveries/<module-slug>-dead-prs.md`.
+
+**Output (combined):** bullet list of `[GIT]`, `[BLAME]`, and `[DEAD-PR]` notes carried into Phase 4.
 
 ---
 
@@ -139,6 +211,11 @@ If 0 results, broaden terms (drop extension, try directory name, try acronym onl
 | Single author in git + no spec docs | Knowledge silo — PRD candidate |
 | Epic describes X + code implements Y | Spec drift — PRD candidate |
 | Commit refs a ticket not in Jira results | Missing history — note it |
+| Ancient lines (blame) in high-churn file | Load-bearing wall — `:UNSAFE:` candidate, needs ADR |
+| Dead PR touching this module | Attempted alternative — explains why current code looks the way it does |
+| Dead PR rejected in review | Explicit decision — strongest ADR candidate, reviewers gave reasons |
+| Dead PR branch name reveals intent (`fix/X`, `feat/Y`) | Missing context recovered — cross-ref with current code |
+| Multiple dead PRs on same area | Persistent contention — this area has a history of disagreement |
 
 Produce a synthesis table: Area | Signals | Interpretation.
 
