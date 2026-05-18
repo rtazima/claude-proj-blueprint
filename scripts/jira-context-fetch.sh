@@ -61,8 +61,19 @@ BASE="${JIRA_BASE_URL%/}/rest/api/3"
 jira_get() {
   local path="$1"
   curl -sf \
-    -H "Authorization: Basic $JIRA_AUTH" \
+    --user "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
     -H "Accept: application/json" \
+    "${BASE}/${path}" 2>/dev/null || echo '{}'
+}
+
+jira_post() {
+  local path="$1"
+  local body="$2"
+  curl -sf \
+    --user "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "$body" \
     "${BASE}/${path}" 2>/dev/null || echo '{}'
 }
 
@@ -70,22 +81,19 @@ jira_get() {
 adf_to_text() {
   local raw="$1"
   if echo "$raw" | jq -e 'type == "object"' &>/dev/null; then
-    echo "$raw" | jq -r '.. | .text? // empty' 2>/dev/null | grep -v '^$' | head -20 | paste -sd ' '
+    echo "$raw" | jq -r '.. | .text? // empty' 2>/dev/null | grep -v '^$' | head -20 | tr '\n' ' '
   else
     echo "$raw" | head -c 500
   fi
 }
 
-url_encode() {
-  python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$1"
-}
-
 jira_search() {
   local jql="$1"
   local fields="summary,issuetype,status,components,created,updated,parent,issuelinks,priority,resolution"
-  local encoded
-  encoded=$(url_encode "$jql")
-  jira_get "search?jql=${encoded}&maxResults=${MAX_RESULTS}&fields=${fields}"
+  local body
+  body=$(jq -n --arg jql "$jql" --arg max "$MAX_RESULTS" --argjson fields '["summary","issuetype","status","components","created","updated","parent","issuelinks","priority","resolution"]' \
+    '{jql: $jql, maxResults: ($max|tonumber), fields: $fields}')
+  jira_post "search/jql" "$body"
 }
 
 # ─── Build JQL ────────────────────────────────────────────────────────────────
@@ -105,8 +113,8 @@ echo "  Jira: searching '${TERMS[*]}' in $PROJECT_KEY..." >&2
 RAW_ALL=$(jira_search "$JQL_ALL")
 RAW_BUGS=$(jira_search "$JQL_BUGS")
 
-TOTAL=$(echo "$RAW_ALL" | jq '.total // 0')
-TOTAL_BUGS=$(echo "$RAW_BUGS" | jq '.total // 0')
+TOTAL=$(echo "$RAW_ALL" | jq '(.total // (.issues | length)) // 0')
+TOTAL_BUGS=$(echo "$RAW_BUGS" | jq '(.total // (.issues | length)) // 0')
 
 echo "  Jira: found $TOTAL tickets ($TOTAL_BUGS bugs)" >&2
 
