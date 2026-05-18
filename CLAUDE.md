@@ -63,6 +63,32 @@ These phrases are auto-detected and activate the corresponding workflow:
 - "build me feature" / "implement feature" → /implement flow
 - "security audit" / "compliance audit" → /spec-review flow
 - "learn from this" / "retrospective" → learner skill
+- "descobrir módulo" / "entender legado" / "arqueologia" / "por que esse código" → context-legacy skill
+
+## Legacy code discovery
+
+Use the `context-legacy` skill to explore any unfamiliar or legacy module before modifying it.
+
+The skill runs 5 phases sequentially:
+
+1. **Code archaeology** — static analysis, public interface, surprising patterns
+2. **Git history** — churn, authors, regression commits, decision messages
+3. **Jira enrichment** — ticket history, bug patterns, decision comments, epic chain _(skipped if `JIRA_*` not set in `.env`)_
+4. **Cross-reference** — correlates signals from all three sources
+5. **Output** — writes `docs/architecture/legacy-context-{module}-{date}.md` with ADR candidates and PRD notes
+
+Output from each run seeds:
+- `adr` skill — to formalize decisions found in code/history
+- `prd-writer` skill — to draft specs for behaviors found in Jira but absent from docs
+- `intent-markers` skill — to annotate `:HACK:`, `:UNSAFE:`, `:FLAKY:` in code
+
+**To enable Jira enrichment**, add to `.env`:
+```
+JIRA_BASE_URL=https://your-company.atlassian.net
+JIRA_EMAIL=your@email.com
+JIRA_API_TOKEN=<token from id.atlassian.com>
+JIRA_PROJECT_KEY=PROJ
+```
 
 ## Workflow Rules
 [SPEC] Workflow rules. Example:
